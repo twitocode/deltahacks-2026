@@ -45,8 +45,7 @@ function App() {
             </div>
 
             <nav className="flex items-center gap-8 text-sm font-medium opacity-90">
-              <a href="#" className="hover:text-gray-300 transition-colors">About Us</a>
-              <a href="#" className="hover:text-gray-300 transition-colors">Repository</a>
+              <a href="https://github.com/twitocode/deltahacks-2026" target="_blank" className="hover:text-gray-300 transition-colors">GitHub Repository</a>
             </nav>
           </header>
 
