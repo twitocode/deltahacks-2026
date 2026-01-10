@@ -6,7 +6,7 @@ from app.models.schemas import (
     PredictionRequest, 
     PredictionResponse,
     SimpleProbabilityArray,
-    PredictionRequestSpec
+    SearchRequest
 )
 from app.services.prediction_engine import PredictionEngine
 
@@ -106,8 +106,8 @@ async def create_simple_prediction(request: PredictionRequest):
         )
 
 
-@router.post("/predict/array")
-async def predict_array_spec(request: PredictionRequestSpec):
+@router.post("/search")
+async def search(request: SearchRequest):
     """
     Generate probability prediction matching exact API specification.
     
