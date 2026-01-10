@@ -1,22 +1,35 @@
 import numpy as np
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import uuid
+from functools import lru_cache
 
 from app.models.schemas import (
     PredictionRequest, PredictionResponse, TimeSnapshot, GridCell
 )
 from app.models.terrain_model import TerrainModel
 from app.models.human_behavior import BehaviorModel, MovementStrategy
+from app.utils.weather_client import WeatherClient
+from app.utils.elevation_api_helper import fetch_elevation_grid_from_api
 
 
 class PredictionEngine:
     """Core engine for predicting hiker location probabilities over time"""
     
-    def __init__(self):
+    def __init__(self, use_elevation_api: bool = False):
+        """
+        Initialize prediction engine.
+        
+        Args:
+            use_elevation_api: If True, fetch real elevation from Open-Elevation API
+                             (slower but works anywhere). If False, use synthetic.
+        """
         self.behavior_model = BehaviorModel()
+        self.weather_client = WeatherClient()
+        self.terrain_cache = {}  # Cache terrain models by location
+        self.use_elevation_api = use_elevation_api
     
-    def predict(self, request: PredictionRequest) -> PredictionResponse:
+    async def predict(self, request: PredictionRequest) -> PredictionResponse:
         """
         Generate probability predictions for hiker location over time.
         
@@ -30,17 +43,35 @@ class PredictionEngine:
         hours_since_last_seen = (current_time - time_last_seen).total_seconds() / 3600
         total_hours = hours_since_last_seen + 12  # Current + 12 hours prediction
         
-        # Initialize terrain model
-        terrain = TerrainModel(
+        # Get or create cached terrain model
+        terrain = self._get_cached_terrain(
             center_lat=request.last_known_location.latitude,
             center_lon=request.last_known_location.longitude,
             radius_km=request.search_radius_km,
             grid_resolution_m=request.grid_resolution_m
         )
         
-        # TODO: Load actual terrain data
-        # For now, generate synthetic elevation for testing
-        terrain.elevation_grid = self._generate_synthetic_elevation(terrain.grid_size)
+        # Fetch weather conditions
+        weather_data = await self.weather_client.get_weather(
+            request.last_known_location.latitude,
+            request.last_known_location.longitude
+        )
+        
+        # Optionally fetch real elevation data from API
+        if self.use_elevation_api and terrain.elevation_grid.max() < 500:
+            # Looks like synthetic data, try to get real data
+            try:
+                real_elevation = await fetch_elevation_grid_from_api(
+                    center_lat=request.last_known_location.latitude,
+                    center_lon=request.last_known_location.longitude,
+                    radius_km=request.search_radius_km,
+                    grid_size=terrain.grid_size,
+                    max_batch_size=100
+                )
+                terrain.elevation_grid = real_elevation
+            except Exception as e:
+                print(f"Failed to fetch elevation from API: {e}")
+                # Continue with synthetic data
         
         # Initialize probability grid at LKL
         start_row, start_col = terrain.lat_lon_to_grid(
@@ -67,7 +98,8 @@ class PredictionEngine:
                     terrain=terrain,
                     subject_profile=request.subject_profile,
                     hours_elapsed=hours_elapsed,
-                    interval_hours=interval_hours
+                    interval_hours=interval_hours,
+                    weather_data=weather_data
                 )
             
             # Create snapshot
@@ -79,6 +111,10 @@ class PredictionEngine:
             )
             snapshots.append(snapshot)
         
+        # Add weather info to metadata
+        weather_summary = self.weather_client.get_weather_summary(weather_data)
+        weather_modifier = self.weather_client.get_movement_modifier(weather_data)
+        
         return PredictionResponse(
             request_id=str(uuid.uuid4()),
             snapshots=snapshots,
@@ -88,7 +124,9 @@ class PredictionEngine:
                 "search_radius_km": request.search_radius_km,
                 "total_snapshots": len(snapshots),
                 "subject_age": request.subject_profile.age,
-                "subject_experience": request.subject_profile.experience_level.value
+                "subject_experience": request.subject_profile.experience_level.value,
+                "weather_conditions": weather_summary,
+                "weather_impact": f"{weather_modifier:.2f}x movement speed"
             }
         )
     
@@ -98,7 +136,8 @@ class PredictionEngine:
         terrain: TerrainModel,
         subject_profile,
         hours_elapsed: float,
-        interval_hours: float
+        interval_hours: float,
+        weather_data: Optional[Dict] = None
     ) -> np.ndarray:
         """
         Evolve the probability distribution based on movement patterns.
@@ -114,6 +153,15 @@ class PredictionEngine:
             subject_profile.sex
         )
         panic_mult = self.behavior_model.get_panic_multiplier(hours_elapsed)
+        
+        # Apply weather modifier
+        weather_mult = self.weather_client.get_movement_modifier(weather_data)
+        
+        # Check if weather forces sheltering
+        if self.weather_client.should_shelter(weather_data, hours_elapsed):
+            # Increase staying put weight dramatically
+            weather_mult *= 0.3
+        
         movement_strategies = self.behavior_model.get_movement_strategy_weights(
             subject_profile.age,
             subject_profile.sex,
@@ -136,7 +184,7 @@ class PredictionEngine:
                     source_prob=current_prob,
                     new_grid=new_grid,
                     terrain=terrain,
-                    base_travel_rate=base_travel_rate * panic_mult,
+                    base_travel_rate=base_travel_rate * panic_mult * weather_mult,
                     movement_strategies=movement_strategies,
                     interval_hours=interval_hours
                 )
@@ -310,19 +358,42 @@ class PredictionEngine:
             mean_probability=float(np.mean(probability_grid))
         )
     
-    def _generate_synthetic_elevation(self, grid_size: int) -> np.ndarray:
-        """Generate synthetic elevation data for testing"""
-        # Create a simple terrain with some hills
-        x = np.linspace(-1, 1, grid_size)
-        y = np.linspace(-1, 1, grid_size)
-        X, Y = np.meshgrid(x, y)
+    def _get_cached_terrain(
+        self,
+        center_lat: float,
+        center_lon: float,
+        radius_km: float,
+        grid_resolution_m: float
+    ) -> TerrainModel:
+        """
+        Get cached terrain model or create new one.
         
-        # Multiple sine waves for varied terrain
-        elevation = (
-            100 * np.sin(3 * X) * np.cos(3 * Y) +
-            50 * np.sin(5 * X + 1) +
-            75 * np.cos(4 * Y + 0.5) +
-            200  # Base elevation
+        Caching significantly improves performance for repeated predictions
+        in the same area.
+        """
+        # Create cache key (round to 2 decimals for reasonable cache hits)
+        cache_key = (
+            round(center_lat, 2),
+            round(center_lon, 2),
+            round(radius_km, 1),
+            round(grid_resolution_m, 0)
         )
         
-        return elevation
+        if cache_key in self.terrain_cache:
+            return self.terrain_cache[cache_key]
+        
+        # Create new terrain model
+        terrain = TerrainModel(
+            center_lat=center_lat,
+            center_lon=center_lon,
+            radius_km=radius_km,
+            grid_resolution_m=grid_resolution_m
+        )
+        
+        # Cache it (limit cache size to prevent memory issues)
+        if len(self.terrain_cache) > 50:
+            # Remove oldest entry
+            self.terrain_cache.pop(next(iter(self.terrain_cache)))
+        
+        self.terrain_cache[cache_key] = terrain
+        return terrain
