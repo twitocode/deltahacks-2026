@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 const WORDS = ["Faster", "More Efficient", "Safer", "Reliable",
-  "Cost-Effective", "Data-Driven", "Customizable", "Scalable", "Secure", "User-Friendly"
+  "Cost-Effective", "Data-Driven", "Scalable", "Secure",
 ];
 
 function App() {
