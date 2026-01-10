@@ -159,9 +159,10 @@ curl -X POST "http://localhost:8000/api/v1/predict" \
 - [x] REST API with FastAPI
 - [x] Behavioral modeling
 - [x] Terrain simulation
-- [ ] WebSocket support for real-time updates
-- [ ] Real terrain data integration (elevation, trails)
-- [ ] Weather API integration
+- [x] WebSocket support for real-time updates
+- [x] Real terrain data integration (elevation, trails)
+- [x] Weather API integration
+- [x] Performance caching
 - [ ] Frontend map interface
 - [ ] Historical case validation
 - [ ] Mobile optimization

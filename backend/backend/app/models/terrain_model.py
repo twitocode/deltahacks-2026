@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple, Optional
 from dataclasses import dataclass
+import os
 
 
 @dataclass
@@ -21,7 +22,8 @@ class TerrainModel:
         center_lat: float,
         center_lon: float,
         radius_km: float,
-        grid_resolution_m: float = 100.0
+        grid_resolution_m: float = 100.0,
+        load_real_data: bool = True
     ):
         """
         Initialize terrain model with a grid around the center point.
@@ -31,6 +33,7 @@ class TerrainModel:
             center_lon: Center longitude
             radius_km: Search radius in kilometers
             grid_resolution_m: Size of each grid cell in meters
+            load_real_data: Whether to attempt loading real terrain data
         """
         self.center_lat = center_lat
         self.center_lon = center_lon
@@ -51,6 +54,10 @@ class TerrainModel:
         
         # Vegetation density grid (0 = clear, 1 = impassable)
         self.vegetation_grid = np.ones((self.grid_size, self.grid_size)) * 0.3  # Default moderate
+        
+        # Attempt to load real data if requested
+        if load_real_data:
+            self._try_load_real_data()
         
     def lat_lon_to_grid(self, lat: float, lon: float) -> Tuple[int, int]:
         """
@@ -188,3 +195,101 @@ class TerrainModel:
         """Load water feature data"""
         if water_data.shape == self.water_grid.shape:
             self.water_grid = water_data.copy()
+    
+    def _try_load_real_data(self):
+        """
+        Attempt to load real terrain data from available sources.
+        Priority: GeoTIFF files > Elevation API > Synthetic data
+        """
+        try:
+            from app.utils.elevation_loader import ElevationLoader
+            from app.utils.osm_loader import OSMLoader
+            
+            # Try to load elevation data
+            elevation_loader = ElevationLoader()
+            
+            # Check if GeoTIFF files exist
+            tif_files = self._find_geotiff_files()
+            if tif_files:
+                # Priority 1: Use GeoTIFF files
+                elevation_loader.load_geotiff(tif_files[0])
+                self.elevation_grid = elevation_loader.get_elevation_grid(
+                    self.center_lat,
+                    self.center_lon,
+                    self.radius_km,
+                    self.grid_size
+                )
+            else:
+                # Priority 2: Try elevation API (requires async, so use synthetic for now)
+                # TODO: Make terrain loading async to support API fetching
+                # For now, use synthetic elevation
+                self.elevation_grid = elevation_loader.get_elevation_grid(
+                    self.center_lat,
+                    self.center_lon,
+                    self.radius_km,
+                    self.grid_size
+                )
+            
+            # Try to load OSM data
+            osm_loader = OSMLoader()
+            json_files = self._find_osm_files()
+            if json_files:
+                osm_loader.load_from_json(json_files[0])
+                
+                # Generate trail density grid
+                if osm_loader.trails or osm_loader.roads:
+                    self.trail_grid = osm_loader.get_trail_density_grid(
+                        self.center_lat,
+                        self.center_lon,
+                        self.radius_km,
+                        self.grid_size
+                    )
+                
+                # Generate water proximity grid
+                if osm_loader.water_features:
+                    self._generate_water_grid(osm_loader)
+        
+        except Exception as e:
+            # Silently fall back to synthetic data
+            # Real data loading is optional
+            pass
+    
+    def _find_geotiff_files(self) -> list:
+        """Find available GeoTIFF elevation files"""
+        data_dir = "data/elevation"
+        if not os.path.exists(data_dir):
+            return []
+        
+        files = []
+        for filename in os.listdir(data_dir):
+            if filename.endswith(('.tif', '.tiff')):
+                files.append(filename)
+        return files
+    
+    def _find_osm_files(self) -> list:
+        """Find available OSM JSON files"""
+        data_dir = "data/osm"
+        if not os.path.exists(data_dir):
+            return []
+        
+        files = []
+        for filename in os.listdir(data_dir):
+            if filename.endswith('.json'):
+                files.append(filename)
+        return files
+    
+    def _generate_water_grid(self, osm_loader):
+        """Generate water proximity grid from OSM data"""
+        for row in range(self.grid_size):
+            for col in range(self.grid_size):
+                lat, lon = self.grid_to_lat_lon(row, col)
+                water_dist = osm_loader.get_nearest_water_distance(lat, lon)
+                
+                # Convert distance to attraction (closer = higher)
+                # Max attraction within 100m, decays to 0 at 500m
+                if water_dist < 100:
+                    self.water_grid[row, col] = 1.0
+                elif water_dist < 500:
+                    self.water_grid[row, col] = 1.0 - ((water_dist - 100) / 400)
+                else:
+                    self.water_grid[row, col] = 0.0

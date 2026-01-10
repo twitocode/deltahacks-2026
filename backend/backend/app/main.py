@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from app.routes import prediction, status
+from app.routes import prediction, status, websocket
 
 # Create FastAPI app
 app = FastAPI(
@@ -25,6 +25,7 @@ app.add_middleware(
 # Include routers
 app.include_router(status.router)
 app.include_router(prediction.router)
+app.include_router(websocket.router)
 
 
 if __name__ == "__main__":
