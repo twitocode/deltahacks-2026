@@ -80,6 +80,29 @@ class PredictionResponse(BaseModel):
     )
 
 
+class PredictionRequestSpec(BaseModel):
+    """Request matching exact API specification"""
+    created_at: str = Field(..., description="ISO 8601 datetime")
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    time_last_seen: str = Field(..., description="ISO 8601 datetime")
+    age: str = Field(..., description="Age as string")
+    gender: str = Field(..., description="male or female")
+    skill_level: int = Field(..., ge=1, le=5, description="Skill level 1-5")
+
+
+class SimpleProbabilityArray(BaseModel):
+    """Simplified response with only probability array"""
+    probability_grid: List[List[float]] = Field(
+        ...,
+        description="2D array of probabilities (grid_size x grid_size)"
+    )
+    grid_info: dict = Field(
+        ...,
+        description="Grid metadata: center_lat, center_lon, radius_km, resolution_m, grid_size"
+    )
+
+
 class HealthCheckResponse(BaseModel):
     """Health check response"""
     status: str
