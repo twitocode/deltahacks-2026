@@ -80,7 +80,7 @@ class PredictionResponse(BaseModel):
     )
 
 
-class PredictionRequestSpec(BaseModel):
+class SearchRequest(BaseModel):
     """Request matching exact API specification"""
     created_at: str = Field(..., description="ISO 8601 datetime")
     latitude: float = Field(..., ge=-90, le=90)
