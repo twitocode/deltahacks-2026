@@ -525,13 +525,14 @@ class SARSimulator:
             tls = time_last_seen.replace(tzinfo=None) if time_last_seen.tzinfo else time_last_seen
             ct = current_time.replace(tzinfo=None) if current_time.tzinfo else current_time
             elapsed = ct - tls
-            elapsed_minutes = int(elapsed.total_seconds() / 60)
+            elapsed_minutes = max(0, int(elapsed.total_seconds() / 60))  # Clamp to >= 0
         else:
             elapsed_minutes = 0
         
         # Total simulation: from t=0 to t+8 hours (480 minutes max)
         # We generate heatmaps at 15-minute intervals
-        total_minutes = min(elapsed_minutes + (8 * 60), 480)  # Cap at 8 hours
+        # Always simulate at least 480 minutes (8 hours)
+        total_minutes = 480
         num_steps = total_minutes // self.settings.timestep_minutes
         
         logger.info(
