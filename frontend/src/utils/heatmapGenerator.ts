@@ -17,8 +17,9 @@ export interface ServerGridResponse {
 // --- Cellular Path Generator (BFS with Noise) ---
 // Creates hotspots that "grow" branching paths outward
 export const generateFakeServerResponse = (center: [number, number]): ServerGridResponse => {
-  const gridSize = 300; // 300x300 high res
-  const cellSizeMeters = 20; // 20m cells
+  console.log(`[HeatmapGen] Generating fake server response for center: ${center}`);
+  const gridSize = 50; // 300x300 high res
+  const cellSizeMeters = 50; // 20m cells
   
   // Initialize grid
   const grid: number[][] = Array(gridSize).fill(0).map(() => Array(gridSize).fill(0));
@@ -98,11 +99,13 @@ export const generateFakeServerResponse = (center: [number, number]): ServerGrid
   };
 };
 
-// --- Adapter: Converts Server Response -> Mapbox GeoJSON ---
+// --- Adapter: Interpolates & Converts Server Response -> Mapbox GeoJSON ---
 export const convertServerGridToGeoJSON = (
   response: ServerGridResponse, 
-  hourKey: string = "0"
+  timeValue: number = 0
 ): GeoJSON.FeatureCollection => {
+  // console.log(`[HeatmapGen] Converting grid to GeoJSON for time: ${timeValue}`);
+  console.log(`[HeatmapGen] Converting grid to GeoJSON for time: ${timeValue.toFixed(2)}`);
   const features: GeoJSON.Feature[] = [];
   const { origin, grid_width, grid_height, cell_size_meters } = response.metadata;
   
