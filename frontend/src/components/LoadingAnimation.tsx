@@ -57,7 +57,7 @@ export default function LoadingAnimation({ isLoading }: LoadingAnimationProps) {
 
     return (
         <div
-            className={`absolute inset-0 z-50 flex items-center justify-center bg-black transition-opacity duration-500 ${isLoading ? "opacity-100" : "opacity-0"
+            className={`absolute inset-0 z-50 flex items-center justify-center bg-black/30 transition-opacity duration-500 ${isLoading ? "opacity-100" : "opacity-0"
                 }`}
         >
             <div className="flex flex-col items-center gap-8">

@@ -13,8 +13,8 @@ interface MapboxHeatmapProps {
 
 // Style URLs
 const STYLE_3D = "mapbox://styles/mapbox/standard";
-const STYLE_2D_DARK = "mapbox://styles/mapbox/dark-v11";
-const STYLE_2D_LIGHT = "mapbox://styles/mapbox/light-v11";
+const STYLE_2D_DARK = "mapbox://styles/mapbox/navigation-night-v1";
+const STYLE_2D_LIGHT = "mapbox://styles/mapbox/streets-v12";
 
 export default function MapboxHeatmap({
   data,
@@ -93,18 +93,18 @@ export default function MapboxHeatmap({
         type: "geojson",
         data: selectedPointRef.current
           ? {
-              type: "FeatureCollection",
-              features: [
-                {
-                  type: "Feature",
-                  properties: {},
-                  geometry: {
-                    type: "Point",
-                    coordinates: selectedPointRef.current,
-                  },
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: {
+                  type: "Point",
+                  coordinates: selectedPointRef.current,
                 },
-              ],
-            }
+              },
+            ],
+          }
           : { type: "FeatureCollection", features: [] },
       });
     }
@@ -138,11 +138,12 @@ export default function MapboxHeatmap({
       container: mapContainerRef.current,
       style: is3D ? STYLE_3D : isDarkMode ? STYLE_2D_DARK : STYLE_2D_LIGHT,
       center: initialCenter,
-      zoom: 12,
+      zoom: 2, // Start zoomed out for globe view
       pitch: is3D ? 60 : 0,
       minPitch: 0,
       maxPitch: 85,
       bearing: 0,
+      projection: "globe", // Enable globe projection
       // Configure light preset for Standard style
       ...(is3D && {
         config: {
@@ -275,11 +276,10 @@ export default function MapboxHeatmap({
     const newStyle = is3D
       ? STYLE_3D
       : isDarkMode
-      ? STYLE_2D_DARK
-      : STYLE_2D_LIGHT;
+        ? STYLE_2D_DARK
+        : STYLE_2D_LIGHT;
     console.log(
-      `[MapboxHeatmap] Switching to ${is3D ? "3D" : "2D"} ${
-        isDarkMode ? "Dark" : "Light"
+      `[MapboxHeatmap] Switching to ${is3D ? "3D" : "2D"} ${isDarkMode ? "Dark" : "Light"
       } style`
     );
 
