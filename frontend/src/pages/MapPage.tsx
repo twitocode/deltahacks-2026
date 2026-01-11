@@ -32,22 +32,19 @@ function MapPage() {
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
 
-  // Calculate dynamic max time from server data (capped at 12h = 720 minutes)
+  // Calculate dynamic max time from server data (keys are in MINUTES)
   const maxMinutes = useMemo(() => {
-    if (!serverData) return 720; // Default to 12h if no data
+    if (!serverData) return 480; // Default to 8h if no data
     const keys = Object.keys(serverData.predictions).map(parseFloat);
-    const maxHour = Math.max(...keys, 0);
-    // Cap at 12 hours (720 minutes) to match backend prediction range
-    return Math.min(maxHour * 60, 720);
+    // Keys are already in minutes (0, 15, 30, ... 480)
+    return Math.max(...keys, 0);
   }, [serverData]);
 
   // Derived GeoJSON for the map (re-calculated when time or data changes)
   const heatmapGeoJson = useMemo(() => {
     if (!serverData) return undefined;
-    const timeValHours = timeOffset / 60;
-    // convertServerGridToGeoJSON now handles the string conversion internally for the key lookup
-    // but expects a number for the argument.
-    return convertServerGridToGeoJSON(serverData, timeValHours);
+    // timeOffset is already in minutes, pass directly
+    return convertServerGridToGeoJSON(serverData, timeOffset);
   }, [serverData, timeOffset]);
 
   // Center of the map
@@ -320,9 +317,8 @@ function MapPage() {
       <div className="flex-1 relative">
         <div className="absolute top-4 right-4 z-50 bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
           <div
-            className={`w-3 h-3 rounded-full ${
-              isOnline ? "bg-green-500" : "bg-red-500"
-            } animate-pulse`}
+            className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"
+              } animate-pulse`}
           />
           <span className="text-white text-sm font-medium">
             {isOnline ? "Online" : "Offline"}
@@ -348,11 +344,10 @@ function MapPage() {
                 <button
                   key={speed}
                   onClick={() => handleSpeedChange(speed)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    playbackSpeed === speed
+                  className={`px-2 py-1 text-xs rounded transition-colors ${playbackSpeed === speed
                       ? "bg-white text-black"
                       : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
-                  }`}
+                    }`}
                 >
                   {speed}x
                 </button>
@@ -450,9 +445,8 @@ function MapPage() {
                   (_, i) => (
                     <div key={i} className="flex flex-col items-center">
                       <div
-                        className={`w-0.5 ${
-                          i % 3 === 0 ? "h-4" : "h-2"
-                        } bg-gray-500`}
+                        className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"
+                          } bg-gray-500`}
                       />
                     </div>
                   )
