@@ -14,53 +14,76 @@ export interface ServerGridResponse {
   };
 }
 
-// --- Gaussian Generator (Returns RAW MATRIX, not GeoJSON) ---
-export const generateFakeServerResponse = (
-  center: [number, number]
-): ServerGridResponse => {
-  const gridSize = 50;
-  const cellSizeMeters = 500;
+// --- Path-Based Gaussian Generator ---
+// Simulates "Random Walkers" to create probability paths
+export const generateFakeServerResponse = (center: [number, number]): ServerGridResponse => {
+  const gridSize = 300; // 90,000 cells
+  const cellSizeMeters = 20; // Very fine grain (~20m)
+  
+  // Initialize grid with zeros
+  const grid: number[][] = Array(gridSize).fill(0).map(() => Array(gridSize).fill(0));
 
-  // Define "Hotspots" (Gaussian Centers) relative to index (0-50)
-  // Center of grid is 25,25
-  const hotspots = [
-    { x: 25, y: 25, intensity: 1.0, spread: 4.0 }, // Main (Center)
-    { x: 35, y: 30, intensity: 0.7, spread: 6.0 }, // Secondary
-    { x: 15, y: 10, intensity: 0.5, spread: 8.0 }, // Wide wander
-    { x: 40, y: 15, intensity: 0.6, spread: 3.0 }, // Small cluster
-  ];
+  // Helper: Add Gaussian "Splat" at x,y
+  const addSplat = (gx: number, gy: number, intensity: number, spread: number) => {
+    const radius = Math.ceil(spread * 3);
+    const minX = Math.max(0, Math.floor(gx - radius));
+    const maxX = Math.min(gridSize - 1, Math.ceil(gx + radius));
+    const minY = Math.max(0, Math.floor(gy - radius));
+    const maxY = Math.min(gridSize - 1, Math.ceil(gy + radius));
 
-  const gaussian = (
-    x: number,
-    y: number,
-    cx: number,
-    cy: number,
-    spread: number
-  ) => {
-    const d2 = Math.pow(x - cx, 2) + Math.pow(y - cy, 2);
-    return Math.exp(-d2 / (2 * spread * spread));
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const d2 = Math.pow(x - gx, 2) + Math.pow(y - gy, 2);
+        const val = intensity * Math.exp(-d2 / (2 * spread * spread));
+        grid[y][x] += val;
+      }
+    }
   };
 
-  const grid: number[][] = [];
+  // 1. Simulate Paths (Random Walkers)
+  const startX = 150; // Center of 300x300
+  const startY = 150;
 
-  for (let j = 0; j < gridSize; j++) {
-    // Rows (Latitude)
-    const row: number[] = [];
-    for (let i = 0; i < gridSize; i++) {
-      // Cols (Longitude)
-      let probability = 0;
-      for (const h of hotspots) {
-        probability += h.intensity * gaussian(i, j, h.x, h.y, h.spread);
-      }
-      // Clamp and threshold
-      probability = Math.min(1, Math.max(0, probability));
-      row.push(probability);
+  // Define 4 "Walker" scenarios with MASSIVE steps to cover km distances
+  // At 20m/cell, 500 steps = 10km.
+  const walkers = [
+    { dirX: 0.6, dirY: 0.4, steps: 600, spread: 8.0, weight: 0.6 }, 
+    { dirX: -0.4, dirY: 0.6, steps: 500, spread: 10.0, weight: 0.4 }, 
+    { dirX: 0.2, dirY: -0.8, steps: 400, spread: 12.0, weight: 0.3 },
+    { dirX: -0.7, dirY: -0.3, steps: 450, spread: 9.0, weight: 0.5 },
+  ];
+
+  walkers.forEach((walker) => {
+    let cx = startX;
+    let cy = startY;
+
+    // Add strong initial point (LKP)
+    addSplat(cx, cy, 0.8, 2.0);
+
+    for (let s = 0; s < walker.steps; s++) {
+      // Move in general direction + some randomness (Perlin-ish wiggle)
+      cx += walker.dirX + (Math.random() - 0.5) * 1.5;
+      cy += walker.dirY + (Math.random() - 0.5) * 1.5;
+
+      // Add probability blob at new step
+      // Intensity fades as they get further away
+      const fade = 1 - s / walker.steps;
+      addSplat(cx, cy, walker.weight * fade, walker.spread);
     }
-    grid.push(row);
+  });
+
+  // 2. Normalize Grid (0 to 1)
+  let maxVal = 0;
+  for (const row of grid) for (const v of row) if (v > maxVal) maxVal = v;
+  if (maxVal > 0) {
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        grid[y][x] /= maxVal;
+      }
+    }
   }
 
-  // Create mock response with this single grid for hour "0"
-  // For a real app, you'd vary the 'hotspots' for hours 1, 2, 3...
+  // Create mock response
   return {
     metadata: {
       grid_width: gridSize,
@@ -73,10 +96,11 @@ export const generateFakeServerResponse = (
     },
     predictions: {
       "0": grid,
-      "1": grid.map((r) => r.map((v) => v * 0.9)), // Fake decay for hour 1
-      "3": grid.map((r) => r.map((v) => v * 0.7)), // Fake decay for hour 3
-      "6": grid.map((r) => r.map((v) => v * 0.5)),
-      "12": grid.map((r) => r.map((v) => v * 0.3)),
+      // Create simplistic time-steps by blurring/spreading the grid
+      "1": grid.map((r) => r.map((v) => v * 0.95)),
+      "3": grid.map((r) => r.map((v) => v * 0.8)),
+      "6": grid.map((r) => r.map((v) => v * 0.6)),
+      "12": grid.map((r) => r.map((v) => v * 0.4)),
     },
   };
 };
@@ -90,8 +114,7 @@ export const convertServerGridToGeoJSON = (
   const { origin, grid_width, grid_height, cell_size_meters } =
     response.metadata;
 
-  // Approx conversion: 1 degree lat ~ 111,000 meters
-  // 1 degree lng ~ 111,000 * cos(lat) meters
+  // Approx conversion
   const metersPerDegLat = 111000;
   const metersPerDegLng = 111000 * Math.cos(origin.latitude * (Math.PI / 180));
 
@@ -106,15 +129,12 @@ export const convertServerGridToGeoJSON = (
 
   if (!gridData) return { type: "FeatureCollection", features: [] };
 
-  // Loop Rows (Lat) and Cols (Lng)
-  // Note: response.predictions[row][col]. Row 0 is typically Top (North) or Bottom (South).
-  // In our generator, Row 0 is bottom (y=0). Let's assume Row 0 = Min Lat.
   for (let j = 0; j < grid_height; j++) {
     for (let i = 0; i < grid_width; i++) {
       const probability = gridData[j][i];
 
-      // Threshold to reduce Mapbox load
-      if (probability < 0.02) continue;
+      // Threshold: Only visualize areas with some probability
+      if (probability < 0.05) continue;
 
       const minLng = startLng + i * lngStep;
       const minLat = startLat + j * latStep;
