@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     num_agents: int = 1000  # Number of Monte Carlo agents
     timestep_minutes: int = 15  # Simulation timestep
     max_simulation_hours: int = 18  # 6 hours before + 12 hours after
+    parallel_agents: bool = True  # Enable multiprocessing
+    max_workers: int = 2  # Number of worker processes (default for Vultr 2-CPU)
     
     # Overpass API for OSM data
     overpass_api_url: str = "https://overpass-api.de/api/interpreter"

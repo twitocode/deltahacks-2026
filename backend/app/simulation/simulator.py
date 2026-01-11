@@ -9,8 +9,9 @@ import math
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from enum import Enum
+import concurrent.futures
 
 import numpy as np
 from tqdm import tqdm
@@ -178,17 +179,108 @@ class SimulationResult:
     radius_km: float
 
 
-class SARSimulator:
-    """
-    Monte Carlo simulator for SAR probability prediction.
+# --- Standalone functions for multiprocessing ---
+
+def _latlon_to_index(
+    lat: float,
+    lon: float,
+    terrain: TerrainModel
+) -> Tuple[int, int]:
+    """Convert lat/lon to grid indices."""
+    west, south, east, north = terrain.bounds
+    rows, cols = terrain.shape
     
-    Simulates multiple agents (possible person trajectories) using
-    random walks influenced by terrain, weather, and profile.
-    """
+    col = int((lon - west) / (east - west) * cols)
+    row = int((north - lat) / (north - south) * rows)
     
-    # Movement constants
-    BASE_SPEED_MPS = 1.0  # Base walking speed m/s
-    TIMESTEP_SECONDS = 900  # 15 minutes
+    return row, col
+
+def _is_valid_index(
+    row: int,
+    col: int,
+    shape: Tuple[int, int]
+) -> bool:
+    """Check if grid indices are valid."""
+    return 0 <= row < shape[0] and 0 <= col < shape[1]
+
+def _calculate_direction_weights(
+    agent: Agent,
+    sampler: TerrainSampler,
+    features: FeatureMasks,
+    profile: HikerProfile,
+    terrain: TerrainModel,
+    directions: List[Tuple[int, int]]
+) -> List[float]:
+    """Calculate movement probability weights for each direction."""
+    weights = []
+    
+    # Grid position for feature lookup
+    row, col = _latlon_to_index(
+        agent.lat, agent.lon, terrain
+    )
+    
+    for dx, dy in directions:
+        weight = 1.0
+        
+        # Lookahead for features
+        check_lat = agent.lat + dy * 0.0005 # ~50m
+        check_lon = agent.lon + dx * 0.0005
+        
+        # 1. Slope / Signal Seeking (Uphill bias)
+        # Historically downhill, BUT new data says uphill for signal
+        slope = sampler.slope(agent.lat, agent.lon, check_lat, check_lon)
+        if slope is not None:
+            if slope > 0: # Uphill
+                 if agent.strategy == Strategy.VIEW_ENHANCING:
+                     weight *= 3.0 # Strong pull uphill
+                 else:
+                     weight *= 1.2 # General bias for signal
+            else: # Downhill
+                 weight *= 0.8 # Reduced bias
+        
+        # 2. Linear Features (Trails/Roads)
+        check_row, check_col = _latlon_to_index(
+            check_lat, check_lon, terrain
+        )
+        
+        if _is_valid_index(check_row, check_col, features.shape):
+            # Trail Attraction
+            # If doing Route Traveling, very strong pull
+            is_on_trail = features.trails[check_row, check_col]
+            is_on_road = features.roads[check_row, check_col]
+            
+            if is_on_trail or is_on_road:
+                if agent.strategy == Strategy.ROUTE_TRAVELING:
+                     weight *= 5.0 
+                else:
+                     weight *= 2.0 # General attraction (58m rule)
+            
+            # Water Avoidance (unless thirsty? assume avoidance for safety)
+            if features.rivers[check_row, check_col]:
+                weight *= 0.1
+            
+             # Cliff Avoidance
+            if features.cliffs[check_row, check_col]:
+                weight *= 0.01
+
+        weights.append(max(0.01, weight))
+    
+    return weights
+
+def step_single_agent_pure(
+    agent: Agent,
+    sampler: TerrainSampler,
+    features: FeatureMasks,
+    profile: HikerProfile,
+    weather: WeatherConditions,
+    terrain: TerrainModel,
+    timestep_seconds: int = 900
+) -> Tuple[Agent, List[Dict[str, Any]]]:
+    """
+    Move a single agent based on terrain, features, and profile.
+    Returns: (Updated Agent, List of log events)
+    """
+    logs = []
     
     # Movement direction weights
     DIRECTIONS = [
@@ -201,6 +293,171 @@ class SARSimulator:
         (-1, 0),   # West
         (-1, 1),   # NW
     ]
+    
+    # Increment step counter
+    agent.steps_taken += 1
+    
+    # Time-based stop probability (ISRID data)
+    # 25% stop > 1hr (4 steps), 50% > 5hr (20 steps), 95% > 24hr (96 steps)
+    if agent.steps_taken > 4:
+        if agent.steps_taken > 96:
+            stop_prob = 0.05
+        elif agent.steps_taken > 20:
+            stop_prob = 0.02
+        else:
+            stop_prob = 0.005
+        
+        if random.random() < stop_prob:
+            agent.is_active = False
+            logs.append({"type": "stop", "reason": f"ISRID User fatigue stop (prob={stop_prob:.1%})"})
+            return agent, logs
+    
+    # Strategy: Staying Put
+    if agent.strategy == Strategy.STAYING_PUT:
+        if random.random() < 0.99:
+            logs.append({"type": "decision", "decision_type": "WAIT", "details": "Staying put (99% chance)"})
+            return agent, logs
+    
+    # Effective speed calculation
+    profile_speed = profile.speed_factor
+    weather_penalty = weather.movement_penalty
+    
+    # Direction selection based on strategy
+    dx, dy = 0.0, 0.0
+    
+    if agent.strategy == Strategy.DIRECTION_TRAVELING:
+        # Use persistent heading with small variance
+        heading_variance = 0.15  # ~8 degrees
+        actual_heading = agent.heading + random.gauss(0, heading_variance)
+        dx = math.sin(actual_heading)
+        dy = math.cos(actual_heading)
+        logs.append({
+            "type": "decision", 
+            "decision_type": "MOVE", 
+            "details": f"Direction Traveling (Goal: {math.degrees(agent.heading):.0f}°, Actual: {math.degrees(actual_heading):.0f}°)"
+        })
+    else:
+        # Other strategies use weighted random direction
+        weights = _calculate_direction_weights(
+            agent, sampler, features, profile, terrain, DIRECTIONS
+        )
+        
+        total_weight = sum(weights)
+        if total_weight < 0.001:
+            agent.is_active = False
+            logs.append({"type": "stop", "reason": "Trapped (0 valid moves)"})
+            return agent, logs
+            
+        normalized = [w / total_weight for w in weights]
+        direction_idx = random.choices(range(8), weights=normalized)[0]
+        dx, dy = DIRECTIONS[direction_idx]
+        
+        # Add randomness based on profile & Strategy
+        randomness = profile.direction_randomness
+        if agent.strategy == Strategy.RANDOM_WALKING:
+            randomness = 1.0
+                
+        dx += random.gauss(0, randomness * 0.3)
+        dy += random.gauss(0, randomness * 0.3)
+        
+        cardinal = DIRECTIONS[direction_idx]
+        logs.append({
+            "type": "decision",
+            "decision_type": "MOVE",
+            "details": f"Weighted Choice (Idx: {direction_idx}, Base: {cardinal})"
+        })
+    
+    # Normalize direction
+    mag = math.sqrt(dx**2 + dy**2)
+    if mag > 0:
+        dx /= mag
+        dy /= mag
+        
+    # Determine target LatLon
+    # Tobler's Function
+    lookahead_dist = 20.0 # meters
+    lookahead_lat = agent.lat + dy * (lookahead_dist / 111320.0)
+    lookahead_lon = agent.lon + dx * (lookahead_dist / (111320.0 * math.cos(math.radians(agent.lat))))
+    
+    slope = sampler.slope(agent.lat, agent.lon, lookahead_lat, lookahead_lon) or 0.0
+    
+    tobler_speed_kmh = 6 * math.exp(-3.5 * abs(slope + 0.05))
+    tobler_speed_mps = tobler_speed_kmh / 3.6
+    
+    # Apply factors
+    final_speed = tobler_speed_mps * (profile_speed / 1.317)
+    final_speed *= (1.0 - weather_penalty)
+    final_speed *= agent.energy
+    
+    distance_m = final_speed * timestep_seconds
+    
+    distance_lat = distance_m / 111320.0
+    distance_lon = distance_m / (111320.0 * math.cos(math.radians(agent.lat)))
+    
+    new_lat = agent.lat + dy * distance_lat
+    new_lon = agent.lon + dx * distance_lon
+    
+    # Check bounds
+    west, south, east, north = terrain.bounds
+    if not (south <= new_lat <= north and west <= new_lon <= east):
+        agent.is_active = False
+        logs.append({"type": "stop", "reason": "Left simulation bounds"})
+        return agent, logs
+    
+    # Update agent position
+    new_elevation = sampler.elevation(new_lat, new_lon)
+    if new_elevation is None:
+            agent.is_active = False
+            logs.append({"type": "stop", "reason": "Moved to invalid terrain (No elevation)"})
+            return agent, logs
+
+    old_lat = agent.lat
+    old_lon = agent.lon
+    old_energy = agent.energy
+
+    agent.lat = new_lat
+    agent.lon = new_lon
+    agent.elevation = new_elevation
+    
+    # Log successful move
+    logs.append({
+        "type": "movement",
+        "old_lat": old_lat,
+        "old_lon": old_lon,
+        "new_lat": new_lat,
+        "new_lon": new_lon,
+        "distance_m": distance_m,
+        "direction": f"{dx:.2f},{dy:.2f}",
+        "speed_mps": final_speed
+    })
+    
+    # Energy and Fatigue (Simple model)
+    energy_loss = 0.005 # Base metabolic cost
+    if slope > 0:
+            energy_loss += slope * 0.05 # Uphill cost
+    
+    agent.energy = max(0.1, agent.energy - energy_loss)
+    logs.append({
+        "type": "energy",
+        "old_energy": old_energy,
+        "new_energy": agent.energy,
+        "reason": f"Walk cost + Slope {slope:.2f}"
+    })
+    
+    return agent, logs
+
+
+class SARSimulator:
+    """
+    Monte Carlo simulator for SAR probability prediction.
+    
+    Simulates multiple agents (possible person trajectories) using
+    random walks influenced by terrain, weather, and profile.
+    """
+    
+    # Movement constants
+    BASE_SPEED_MPS = 1.0  # Base walking speed m/s
+    TIMESTEP_SECONDS = 900  # 15 minutes
     
     def __init__(self):
         """Initialize the simulator."""
@@ -295,9 +552,12 @@ class SARSimulator:
             tracker.log_step_start(step)
             
             # Update agent positions
-            self._step_agents(
+            agents = await self._step_agents(
                 agents, sampler, feature_masks, profile, weather, terrain, tracker
             )
+            
+            # Update tracker's reference to agents list since we might have replaced it
+            tracker.agents = agents
             
             # Generate heatmap for this timestep
             heatmap = self._agents_to_heatmap(agents, terrain)
@@ -382,7 +642,7 @@ class SARSimulator:
         
         return agents
     
-    def _step_agents(
+    async def _step_agents(
         self,
         agents: List[Agent],
         sampler: TerrainSampler,
@@ -391,230 +651,105 @@ class SARSimulator:
         weather: WeatherConditions,
         terrain: TerrainModel,
         tracker: AgentTracker
-    ) -> None:
-        """Advance all agents by one timestep."""
-        for agent in agents:
-            if not agent.is_active:
-                continue
+    ) -> List[Agent]:
+        """
+        Advance all agents by one timestep.
+        Uses parallel processing if enabled in settings.
+        """
+        active_agents = [a for a in agents if a.is_active]
+        inactive_agents = [a for a in agents if not a.is_active]
+        
+        if not active_agents:
+            return agents
             
-            self._step_single_agent(
-                agent, sampler, features, profile, weather, terrain, tracker
-            )
-    
-    def _step_single_agent(
-        self,
-        agent: Agent,
-        sampler: TerrainSampler,
-        features: FeatureMasks,
-        profile: HikerProfile,
-        weather: WeatherConditions,
-        terrain: TerrainModel,
-        tracker: AgentTracker
-    ) -> None:
-        """Move a single agent based on terrain, features, and profile."""
+        settings = get_settings()
         
-        # Increment step counter
-        agent.steps_taken += 1
+        # 1. Identify tracked agent to run locally
+        tracked_agent = None
+        other_agents = []
         
-        # Time-based stop probability (ISRID data)
-        # 25% stop > 1hr (4 steps), 50% > 5hr (20 steps), 95% > 24hr (96 steps)
-        # We model this as a per-step probability to achieve cumulative target
-        if agent.steps_taken > 4:
-            # Calculate stop probability per step to reach target
-            if agent.steps_taken > 96:
-                stop_prob = 0.05  # Lowered from 0.15
-            elif agent.steps_taken > 20:
-                stop_prob = 0.02  # Lowered from 0.05
-            else:
-                stop_prob = 0.005  # Lowered from 0.02
+        if tracker.enabled and tracker.tracked_id is not None:
+            for agent in active_agents:
+                if agent.id == tracker.tracked_id:
+                    tracked_agent = agent
+                else:
+                    other_agents.append(agent)
             
-            if random.random() < stop_prob:
-                agent.is_active = False
-                tracker.log_stop(agent.id, f"ISRID User fatigue stop (prob={stop_prob:.1%})")
-                return
-        
-        # Strategy: Staying Put
-        if agent.strategy == Strategy.STAYING_PUT:
-            if random.random() < 0.99:
-                tracker.log_decision(agent.id, "WAIT", "Staying put (99% chance)")
-                return
-        
-        # Effective speed calculation
-        profile_speed = profile.speed_factor
-        weather_penalty = weather.movement_penalty
-        
-        # Direction selection based on strategy
-        if agent.strategy == Strategy.DIRECTION_TRAVELING:
-            # Use persistent heading with small variance
-            heading_variance = 0.15  # ~8 degrees
-            actual_heading = agent.heading + random.gauss(0, heading_variance)
-            dx = math.sin(actual_heading)
-            dy = math.cos(actual_heading)
-            tracker.log_decision(agent.id, "MOVE", f"Direction Traveling (Goal: {math.degrees(agent.heading):.0f}°, Actual: {math.degrees(actual_heading):.0f}°)")
+            # If tracked agent was not found in active list (maybe it stopped), 
+            # then all active agents are "others"
+            if tracked_agent is None:
+                other_agents = active_agents
         else:
-            # Other strategies use weighted random direction
-            weights = self._calculate_direction_weights(
-                agent, sampler, features, profile, terrain
+            other_agents = active_agents
+            
+        updated_agents = []
+        
+        # 2. Run tracked agent locally (synchronously) to handle logging
+        if tracked_agent:
+            updated_one, logs = step_single_agent_pure(
+                tracked_agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
             )
+            updated_agents.append(updated_one)
             
-            total_weight = sum(weights)
-            if total_weight < 0.001:
-                agent.is_active = False
-                tracker.log_stop(agent.id, "Trapped (0 valid moves)")
-                return
-                
-            normalized = [w / total_weight for w in weights]
-            direction_idx = random.choices(range(8), weights=normalized)[0]
-            dx, dy = self.DIRECTIONS[direction_idx]
-            
-            # Add randomness based on profile & Strategy
-            randomness = profile.direction_randomness
-            if agent.strategy == Strategy.RANDOM_WALKING:
-                randomness = 1.0
-                 
-            dx += random.gauss(0, randomness * 0.3)
-            dy += random.gauss(0, randomness * 0.3)
-            
-            cardinal = self.DIRECTIONS[direction_idx]
-            tracker.log_decision(agent.id, "MOVE", f"Weighted Choice (Idx: {direction_idx}, Base: {cardinal})")
-        
-        # Normalize direction
-        mag = math.sqrt(dx**2 + dy**2)
-        if mag > 0:
-            dx /= mag
-            dy /= mag
-            
-        # Determine target LatLon
-        # Calculate speed with Tobler's Function
-        # We need slope in the chosen direction. To approximate, we sample a point ahead.
-        lookahead_dist = 20.0 # meters
-        lookahead_lat = agent.lat + dy * (lookahead_dist / 111320.0)
-        lookahead_lon = agent.lon + dx * (lookahead_dist / (111320.0 * math.cos(math.radians(agent.lat))))
-        
-        slope = sampler.slope(agent.lat, agent.lon, lookahead_lat, lookahead_lon) or 0.0
-        
-        # Tobler's Hiking Function: W = 6 * exp(-3.5 * |dh/dx + 0.05|) km/h
-        # dh/dx is slope (tan theta)
-        tobler_speed_kmh = 6 * math.exp(-3.5 * abs(slope + 0.05))
-        tobler_speed_mps = tobler_speed_kmh / 3.6
-        
-        # Apply factors
-        final_speed = tobler_speed_mps * (profile_speed / 1.317) # Normalize profile to male base to scale Tobler
-        final_speed *= (1.0 - weather_penalty)
-        final_speed *= agent.energy
-        
-        distance_m = final_speed * self.TIMESTEP_SECONDS
-        
-        distance_lat = distance_m / 111320.0
-        distance_lon = distance_m / (111320.0 * math.cos(math.radians(agent.lat)))
-        
-        new_lat = agent.lat + dy * distance_lat
-        new_lon = agent.lon + dx * distance_lon
-        
-         # Check bounds
-        west, south, east, north = terrain.bounds
-        if not (south <= new_lat <= north and west <= new_lon <= east):
-            agent.is_active = False
-            tracker.log_stop(agent.id, "Left simulation bounds")
-            return
-        
-        # Update agent position
-        new_elevation = sampler.elevation(new_lat, new_lon)
-        if new_elevation is None:
-             agent.is_active = False
-             tracker.log_stop(agent.id, "Moved to invalid terrain (No elevation)")
-             return
+            # Replay logs to tracker
+            for log in logs:
+                if log["type"] == "decision":
+                    tracker.log_decision(updated_one.id, log["decision_type"], log["details"])
+                elif log["type"] == "movement":
+                    tracker.log_movement(
+                        updated_one.id, 
+                        log["old_lat"], log["old_lon"], 
+                        log["new_lat"], log["new_lon"],
+                        log["distance_m"], log["direction"], log["speed_mps"]
+                    )
+                elif log["type"] == "energy":
+                    tracker.log_energy(
+                        updated_one.id, log["old_energy"], log["new_energy"], log["reason"]
+                    )
+                elif log["type"] == "stop":
+                    tracker.log_stop(updated_one.id, log["reason"])
 
-        old_lat = agent.lat
-        old_lon = agent.lon
+        # 3. Run other agents (Parallel or Serial)
+        if other_agents:
+            if settings.parallel_agents and settings.max_workers > 1:
+                # Parallel Execution
+                chunk_size = max(1, len(other_agents) // (settings.max_workers * 4))
+                
+                with concurrent.futures.ProcessPoolExecutor(max_workers=settings.max_workers) as executor:
+                    # Submit tasks
+                    futures = [
+                        executor.submit(
+                            step_single_agent_pure,
+                            agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
+                        ) 
+                        for agent in other_agents
+                    ]
+                    
+                    # Collect results
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            updated_agent, _ = future.result() # Ignore logs from parallel agents
+                            updated_agents.append(updated_agent)
+                        except Exception as e:
+                            logger.error(f"Error in parallel agent step: {e}")
+                            # If individual agent fails, we might lose it or should return original?
+                            # For now, let's just log. ideally keep old state?
+                            pass
+            else:
+                # Serial Execution
+                for agent in other_agents:
+                    updated_agent, _ = step_single_agent_pure(
+                        agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
+                    )
+                    updated_agents.append(updated_agent)
+        
+        # Recombine all agents
+        # Sort by ID to maintain consistent order if needed, or just extend
+        all_agents = updated_agents + inactive_agents
+        all_agents.sort(key=lambda a: a.id)
+        
+        return all_agents
 
-        agent.lat = new_lat
-        agent.lon = new_lon
-        agent.elevation = new_elevation
-        
-        # Log successful move
-        tracker.log_movement(
-            agent.id, 
-            old_lat=old_lat, old_lon=old_lon,
-            new_lat=new_lat, new_lon=new_lon,
-            distance_m=distance_m,
-            direction=f"{dx:.2f},{dy:.2f}",
-            speed_mps=final_speed
-        )
-        
-        # Energy and Fatigue (Simple model)
-        energy_loss = 0.005 # Base metabolic cost
-        if slope > 0:
-             energy_loss += slope * 0.05 # Uphill cost
-        
-        old_energy = agent.energy
-        agent.energy = max(0.1, agent.energy - energy_loss)
-        tracker.log_energy(agent.id, old_energy, agent.energy, f"Walk cost + Slope {slope:.2f}")
-    
-    def _calculate_direction_weights(
-        self,
-        agent: Agent,
-        sampler: TerrainSampler,
-        features: FeatureMasks,
-        profile: HikerProfile,
-        terrain: TerrainModel
-    ) -> List[float]:
-        """Calculate movement probability weights for each direction."""
-        weights = []
-        
-        # Grid position for feature lookup
-        row, col = self._latlon_to_index(
-            agent.lat, agent.lon, terrain
-        )
-        
-        for dx, dy in self.DIRECTIONS:
-            weight = 1.0
-            
-            # Lookahead for features
-            check_lat = agent.lat + dy * 0.0005 # ~50m
-            check_lon = agent.lon + dx * 0.0005
-            
-            # 1. Slope / Signal Seeking (Uphill bias)
-            # Historically downhill, BUT new data says uphill for signal
-            slope = sampler.slope(agent.lat, agent.lon, check_lat, check_lon)
-            if slope is not None:
-                if slope > 0: # Uphill
-                     if agent.strategy == Strategy.VIEW_ENHANCING:
-                         weight *= 3.0 # Strong pull uphill
-                     else:
-                         weight *= 1.2 # General bias for signal
-                else: # Downhill
-                     weight *= 0.8 # Reduced bias
-            
-            # 2. Linear Features (Trails/Roads)
-            check_row, check_col = self._latlon_to_index(
-                check_lat, check_lon, terrain
-            )
-            
-            if self._is_valid_index(check_row, check_col, features.shape):
-                # Trail Attraction
-                # If doing Route Traveling, very strong pull
-                is_on_trail = features.trails[check_row, check_col]
-                is_on_road = features.roads[check_row, check_col]
-                
-                if is_on_trail or is_on_road:
-                    if agent.strategy == Strategy.ROUTE_TRAVELING:
-                         weight *= 5.0 
-                    else:
-                         weight *= 2.0 # General attraction (58m rule)
-                
-                # Water Avoidance (unless thirsty? assume avoidance for safety)
-                if features.rivers[check_row, check_col]:
-                    weight *= 0.1
-                
-                 # Cliff Avoidance
-                if features.cliffs[check_row, check_col]:
-                    weight *= 0.01
-
-            weights.append(max(0.01, weight))
-        
-        return weights
-    
     def _latlon_to_index(
         self,
         lat: float,
@@ -622,13 +757,7 @@ class SARSimulator:
         terrain: TerrainModel
     ) -> Tuple[int, int]:
         """Convert lat/lon to grid indices."""
-        west, south, east, north = terrain.bounds
-        rows, cols = terrain.shape
-        
-        col = int((lon - west) / (east - west) * cols)
-        row = int((north - lat) / (north - south) * rows)
-        
-        return row, col
+        return _latlon_to_index(lat, lon, terrain)
     
     def _is_valid_index(
         self,
@@ -637,7 +766,7 @@ class SARSimulator:
         shape: Tuple[int, int]
     ) -> bool:
         """Check if grid indices are valid."""
-        return 0 <= row < shape[0] and 0 <= col < shape[1]
+        return _is_valid_index(row, col, shape)
     
     def _agents_to_heatmap(
         self,
