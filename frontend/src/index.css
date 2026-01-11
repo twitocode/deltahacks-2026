@@ -5,7 +5,7 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light;
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -17,6 +17,11 @@ body {
   padding: 0;
   min-height: 100vh;
   background-color: #000;
+}
+
+::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
 }
 
 @theme {

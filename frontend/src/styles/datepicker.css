@@ -1,0 +1,49 @@
+/* Dark Theme Override for React Datepicker */
+.custom-datepicker-calendar {
+    font-family: inherit;
+    background-color: #1a1a1a !important;
+    border: 1px solid #333 !important;
+    color: #fff !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.react-datepicker__header {
+    background-color: #262626 !important;
+    border-bottom: 1px solid #333 !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header,
+.react-datepicker__day-name {
+    color: #fff !important;
+}
+
+.react-datepicker__day {
+    color: #e5e5e5 !important;
+}
+
+.react-datepicker__day:hover {
+    background-color: #404040 !important;
+    color: #fff !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+    background-color: #fff !important;
+    color: #000 !important;
+    font-weight: bold !important;
+}
+
+/* Neutral Weekends - Override the "red" equivalent if any, though default is usually black/gray */
+.react-datepicker__day--weekend {
+    color: #d4d4d4 !important;
+    /* Light gray instead of whatever default */
+}
+
+/* Navigation Arrows */
+.react-datepicker__navigation-icon::before {
+    border-color: #fff !important;
+}
+
+/* Input styling is handled by the passed className in the component */
