@@ -16,6 +16,7 @@ from rasterio.transform import from_bounds
 
 from app.config import get_settings
 from app.dem.dem_loader import get_dem_loader, MeritDEMLoader
+from app.utils.logging import timed_operation
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,7 @@ class TerrainPipeline:
         
         return (rows, cols)
     
+    @timed_operation("load_terrain")
     def load_terrain(
         self,
         center_lat: float,

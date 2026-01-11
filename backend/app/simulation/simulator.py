@@ -22,6 +22,7 @@ from app.terrain.terrain_sampler import TerrainSampler
 from app.terrain.osm_features import FeatureMasks, OSMFeatures, get_osm_loader
 from app.simulation.models import HikerProfile, WeatherConditions, TimeSlice
 from app.simulation.weather import get_weather_service
+from app.utils.logging import timed_operation, measure_time
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +467,7 @@ class SARSimulator:
         self.osm_loader = get_osm_loader()
         self.weather_service = get_weather_service()
     
+    @timed_operation("run_simulation_total")
     async def run_simulation(
         self,
         center_lat: float,
@@ -497,22 +499,25 @@ class SARSimulator:
         )
         
         # Load terrain
-        terrain = self.terrain_pipeline.load_terrain(
-            center_lat, center_lon, radius_km
-        )
+        with measure_time("load_terrain"):
+            terrain = self.terrain_pipeline.load_terrain(
+                center_lat, center_lon, radius_km
+            )
         sampler = TerrainSampler(terrain)
         
         # Load OSM features
-        osm_features = await self.osm_loader.fetch_features(terrain.bounds)
-        feature_masks = self.osm_loader.rasterize_features(
-            osm_features, terrain.shape, terrain.bounds
-        )
+        with measure_time("fetch_osm_features"):
+            osm_features = await self.osm_loader.fetch_features(terrain.bounds)
+            feature_masks = self.osm_loader.rasterize_features(
+                osm_features, terrain.shape, terrain.bounds
+            )
         
         # Get weather conditions
-        elevation = sampler.elevation(center_lat, center_lon) or 1000.0
-        weather = await self.weather_service.get_conditions(
-            center_lat, center_lon, current_time, elevation
-        )
+        with measure_time("get_weather"):
+            elevation = sampler.elevation(center_lat, center_lon) or 1000.0
+            weather = await self.weather_service.get_conditions(
+                center_lat, center_lon, current_time, elevation
+            )
         
         # Calculate simulation duration
         if time_last_seen and current_time:
@@ -535,9 +540,10 @@ class SARSimulator:
         )
         
         # Initialize agents at last known location
-        agents = self._initialize_agents(
-            center_lat, center_lon, sampler, self.settings.num_agents
-        )
+        with measure_time("initialize_agents"):
+            agents = self._initialize_agents(
+                center_lat, center_lon, sampler, self.settings.num_agents
+            )
         
         # Initialize agent tracker for debugging (set enabled=False to disable)
         tracker = AgentTracker(agents, enabled=True)
@@ -545,34 +551,36 @@ class SARSimulator:
         # Run simulation
         time_slices = []
         
-        for step in tqdm(range(num_steps), desc="Simulating", unit="step"):
-            time_offset = step * self.settings.timestep_minutes
-            
-            # Log step start for tracked agent
-            tracker.log_step_start(step)
-            
-            # Update agent positions
-            agents = await self._step_agents(
-                agents, sampler, feature_masks, profile, weather, terrain, tracker
-            )
-            
-            # Update tracker's reference to agents list since we might have replaced it
-            tracker.agents = agents
-            
-            # Generate heatmap for this timestep
-            heatmap = self._agents_to_heatmap(agents, terrain)
-            grid = self._agents_to_grid(agents, terrain, grid_size)
-            
-            time_slices.append(TimeSlice(
-                time_offset_minutes=time_offset,
-                points=heatmap,
-                grid=grid
-            ))
-            
-            # Log progress periodically
-            if step % 10 == 0:
-                active = sum(1 for a in agents if a.is_active)
-                logger.debug(f"Step {step}/{num_steps}: {active} active agents")
+        with measure_time("simulation_loop"):
+            for step in tqdm(range(num_steps), desc="Simulating", unit="step"):
+                time_offset = step * self.settings.timestep_minutes
+                
+                # Log step start for tracked agent
+                tracker.log_step_start(step)
+                
+                # Update agent positions
+                agents = await self._step_agents(
+                    agents, sampler, feature_masks, profile, weather, terrain, tracker
+                )
+                
+                # Update tracker's reference to agents list since we might have replaced it
+                tracker.agents = agents
+                
+                # Generate heatmap for this timestep
+                heatmap = self._agents_to_heatmap(agents, terrain)
+                grid = self._agents_to_grid(agents, terrain, grid_size)
+                
+                time_slices.append(TimeSlice(
+                    time_offset_minutes=time_offset,
+                    points=heatmap,
+                    grid=grid
+                ))
+                
+                # Log progress periodically
+                if step % 10 == 0:
+                    active = sum(1 for a in agents if a.is_active)
+                    logger.debug(f"Step {step}/{num_steps}: {active} active agents")
+        
         
         # Get final positions
         final_positions = [

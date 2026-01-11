@@ -17,6 +17,7 @@ from shapely.geometry import LineString, Point, box
 from shapely.ops import unary_union
 
 from app.config import get_settings
+from app.utils.logging import timed_operation
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class OSMFeatureLoader:
         """Generate cache key for bounds."""
         return hashlib.md5(str(bounds).encode()).hexdigest()
     
+    @timed_operation("fetch_osm_features")
     async def fetch_features(
         self, 
         bounds: Tuple[float, float, float, float]
