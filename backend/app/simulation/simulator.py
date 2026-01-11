@@ -37,6 +37,7 @@ class Strategy(str, Enum):
 @dataclass
 class Agent:
     """A simulated agent representing possible person location."""
+    id: int  # Unique identifier
     lat: float
     lon: float
     elevation: float
@@ -45,6 +46,126 @@ class Agent:
     steps_taken: int = 0
     energy: float = 1.0  # 0-1, decreases over time
     is_active: bool = True
+
+
+class AgentTracker:
+    """
+    Tracks a single agent throughout the simulation for debugging.
+    Logs all decisions, movement, and energy changes.
+    Auto-switches to another active agent when tracked agent stops.
+    """
+    
+    def __init__(self, agents: List[Agent], enabled: bool = True):
+        self.enabled = enabled
+        self.agents = agents
+        self.tracked_id: Optional[int] = None
+        self.log_lines: List[str] = []
+        
+        if enabled and agents:
+            self._select_random_agent()
+    
+    def _select_random_agent(self):
+        """Select a random active agent to track."""
+        active = [a for a in self.agents if a.is_active]
+        if active:
+            import random
+            agent = random.choice(active)
+            self.tracked_id = agent.id
+            self._log(f"🎯 Now tracking Agent #{agent.id} (Strategy: {agent.strategy.value})")
+            self._log(f"   Start: ({agent.lat:.5f}, {agent.lon:.5f}) | Elev: {agent.elevation:.0f}m | Energy: {agent.energy:.0%}")
+        else:
+            self.tracked_id = None
+            self._log("⚠️ No active agents to track")
+    
+    def _log(self, msg: str):
+        """Add to log and print."""
+        self.log_lines.append(msg)
+        logger.info(f"[TRACKER] {msg}")
+    
+    def _get_tracked_agent(self) -> Optional[Agent]:
+        """Get the currently tracked agent."""
+        if self.tracked_id is None:
+            return None
+        for a in self.agents:
+            if a.id == self.tracked_id:
+                return a
+        return None
+    
+    def log_step_start(self, step: int):
+        """Log at the start of a simulation step."""
+        if not self.enabled:
+            return
+        
+        agent = self._get_tracked_agent()
+        if agent is None or not agent.is_active:
+            # Switch to another agent
+            self._log(f"❌ Agent #{self.tracked_id} stopped - switching...")
+            self._select_random_agent()
+            agent = self._get_tracked_agent()
+        
+        if agent:
+            self._log(f"━━━ Step {step} | Agent #{agent.id} ━━━")
+    
+    def log_decision(
+        self,
+        agent_id: int,
+        decision_type: str,
+        details: str
+    ):
+        """Log a decision made by the tracked agent."""
+        if not self.enabled or agent_id != self.tracked_id:
+            return
+        self._log(f"   📍 {decision_type}: {details}")
+    
+    def log_movement(
+        self,
+        agent_id: int,
+        old_lat: float,
+        old_lon: float,
+        new_lat: float,
+        new_lon: float,
+        distance_m: float,
+        direction: str,
+        speed_mps: float
+    ):
+        """Log movement of the tracked agent."""
+        if not self.enabled or agent_id != self.tracked_id:
+            return
+        self._log(f"   🚶 Moved {direction}: {distance_m:.1f}m @ {speed_mps:.2f} m/s")
+        self._log(f"      ({old_lat:.5f}, {old_lon:.5f}) → ({new_lat:.5f}, {new_lon:.5f})")
+    
+    def log_energy(self, agent_id: int, old_energy: float, new_energy: float, reason: str):
+        """Log energy change for tracked agent."""
+        if not self.enabled or agent_id != self.tracked_id:
+            return
+        
+        change = new_energy - old_energy
+        bar = self._energy_bar(new_energy)
+        self._log(f"   ⚡ Energy: {bar} {new_energy:.0%} ({change:+.1%}) [{reason}]")
+    
+    def log_stop(self, agent_id: int, reason: str):
+        """Log when an agent stops."""
+        if not self.enabled or agent_id != self.tracked_id:
+            return
+        self._log(f"   ⛔ STOPPED: {reason}")
+    
+    def _energy_bar(self, energy: float) -> str:
+        """Create visual energy bar."""
+        filled = int(energy * 10)
+        empty = 10 - filled
+        return f"[{'█' * filled}{'░' * empty}]"
+    
+    def get_summary(self) -> str:
+        """Get summary of tracked agent's journey."""
+        agent = self._get_tracked_agent()
+        if not agent:
+            return "No agent tracked"
+        
+        return (
+            f"Agent #{agent.id}: {agent.steps_taken} steps, "
+            f"Energy: {agent.energy:.0%}, Active: {agent.is_active}"
+        )
+
 
 
 @dataclass
@@ -161,15 +282,21 @@ class SARSimulator:
             center_lat, center_lon, sampler, self.settings.num_agents
         )
         
+        # Initialize agent tracker for debugging (set enabled=False to disable)
+        tracker = AgentTracker(agents, enabled=True)
+        
         # Run simulation
         time_slices = []
         
         for step in tqdm(range(num_steps), desc="Simulating", unit="step"):
             time_offset = step * self.settings.timestep_minutes
             
+            # Log step start for tracked agent
+            tracker.log_step_start(step)
+            
             # Update agent positions
             self._step_agents(
-                agents, sampler, feature_masks, profile, weather, terrain
+                agents, sampler, feature_masks, profile, weather, terrain, tracker
             )
             
             # Generate heatmap for this timestep
@@ -242,6 +369,7 @@ class SARSimulator:
             heading = random.uniform(0, 2 * math.pi)
 
             agents.append(Agent(
+                id=len(agents),  # Unique ID
                 lat=agent_lat,
                 lon=agent_lon,
                 elevation=elevation,
@@ -261,7 +389,8 @@ class SARSimulator:
         features: FeatureMasks,
         profile: HikerProfile,
         weather: WeatherConditions,
-        terrain: TerrainModel
+        terrain: TerrainModel,
+        tracker: AgentTracker
     ) -> None:
         """Advance all agents by one timestep."""
         for agent in agents:
@@ -269,7 +398,7 @@ class SARSimulator:
                 continue
             
             self._step_single_agent(
-                agent, sampler, features, profile, weather, terrain
+                agent, sampler, features, profile, weather, terrain, tracker
             )
     
     def _step_single_agent(
@@ -279,7 +408,8 @@ class SARSimulator:
         features: FeatureMasks,
         profile: HikerProfile,
         weather: WeatherConditions,
-        terrain: TerrainModel
+        terrain: TerrainModel,
+        tracker: AgentTracker
     ) -> None:
         """Move a single agent based on terrain, features, and profile."""
         
@@ -300,11 +430,13 @@ class SARSimulator:
             
             if random.random() < stop_prob:
                 agent.is_active = False
+                tracker.log_stop(agent.id, f"ISRID User fatigue stop (prob={stop_prob:.1%})")
                 return
         
         # Strategy: Staying Put
         if agent.strategy == Strategy.STAYING_PUT:
             if random.random() < 0.99:
+                tracker.log_decision(agent.id, "WAIT", "Staying put (99% chance)")
                 return
         
         # Effective speed calculation
@@ -318,6 +450,7 @@ class SARSimulator:
             actual_heading = agent.heading + random.gauss(0, heading_variance)
             dx = math.sin(actual_heading)
             dy = math.cos(actual_heading)
+            tracker.log_decision(agent.id, "MOVE", f"Direction Traveling (Goal: {math.degrees(agent.heading):.0f}°, Actual: {math.degrees(actual_heading):.0f}°)")
         else:
             # Other strategies use weighted random direction
             weights = self._calculate_direction_weights(
@@ -327,6 +460,7 @@ class SARSimulator:
             total_weight = sum(weights)
             if total_weight < 0.001:
                 agent.is_active = False
+                tracker.log_stop(agent.id, "Trapped (0 valid moves)")
                 return
                 
             normalized = [w / total_weight for w in weights]
@@ -340,6 +474,9 @@ class SARSimulator:
                  
             dx += random.gauss(0, randomness * 0.3)
             dy += random.gauss(0, randomness * 0.3)
+            
+            cardinal = self.DIRECTIONS[direction_idx]
+            tracker.log_decision(agent.id, "MOVE", f"Weighted Choice (Idx: {direction_idx}, Base: {cardinal})")
         
         # Normalize direction
         mag = math.sqrt(dx**2 + dy**2)
@@ -378,24 +515,41 @@ class SARSimulator:
         west, south, east, north = terrain.bounds
         if not (south <= new_lat <= north and west <= new_lon <= east):
             agent.is_active = False
+            tracker.log_stop(agent.id, "Left simulation bounds")
             return
         
         # Update agent position
         new_elevation = sampler.elevation(new_lat, new_lon)
         if new_elevation is None:
              agent.is_active = False
+             tracker.log_stop(agent.id, "Moved to invalid terrain (No elevation)")
              return
+
+        old_lat = agent.lat
+        old_lon = agent.lon
 
         agent.lat = new_lat
         agent.lon = new_lon
         agent.elevation = new_elevation
+        
+        # Log successful move
+        tracker.log_movement(
+            agent.id, 
+            old_lat=old_lat, old_lon=old_lon,
+            new_lat=new_lat, new_lon=new_lon,
+            distance_m=distance_m,
+            direction=f"{dx:.2f},{dy:.2f}",
+            speed_mps=final_speed
+        )
         
         # Energy and Fatigue (Simple model)
         energy_loss = 0.005 # Base metabolic cost
         if slope > 0:
              energy_loss += slope * 0.05 # Uphill cost
         
+        old_energy = agent.energy
         agent.energy = max(0.1, agent.energy - energy_loss)
+        tracker.log_energy(agent.id, old_energy, agent.energy, f"Walk cost + Slope {slope:.2f}")
     
     def _calculate_direction_weights(
         self,
