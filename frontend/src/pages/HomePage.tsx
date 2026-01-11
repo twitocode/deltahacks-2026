@@ -292,7 +292,7 @@ function HomePage() {
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
                 2014 • ScienceDirect
               </span>
-              <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
+              <h3 className="text-2xl font-['Open_Sans'] text-white mb-6 line-clamp-3">
                 An analysis of probability of area techniques for missing persons in Yosemite National Park
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
@@ -327,7 +327,7 @@ function HomePage() {
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
                 2022 • Scientific Reports
               </span>
-              <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
+              <h3 className="text-2xl font-['Open_Sans'] text-white mb-6 line-clamp-3">
                 An agent-based model reveals lost person behavior based on data from wilderness search and rescue
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
@@ -361,7 +361,7 @@ function HomePage() {
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
                 The Bravo Zulu
               </span>
-              <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
+              <h3 className="text-2xl font-['Open_Sans'] text-white mb-6 line-clamp-3">
                 Dr. Robert Koester's Lost Person Behavior and How to Contribute to ISRID
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
