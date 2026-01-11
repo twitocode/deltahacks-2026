@@ -28,16 +28,18 @@ logger = logging.getLogger(__name__)
 
 class Strategy(str, Enum):
     """Movement strategies from ISRID data."""
+
     DIRECTION_TRAVELING = "DT"  # 55.9%
-    ROUTE_TRAVELING = "RT"      # 37.7%
-    RANDOM_WALKING = "RW"       # 5.5%
-    VIEW_ENHANCING = "VE"       # 0.6%
-    STAYING_PUT = "SP"          # 0.3%
+    ROUTE_TRAVELING = "RT"  # 37.7%
+    RANDOM_WALKING = "RW"  # 5.5%
+    VIEW_ENHANCING = "VE"  # 0.6%
+    STAYING_PUT = "SP"  # 0.3%
 
 
 @dataclass
 class Agent:
     """A simulated agent representing possible person location."""
+
     id: int  # Unique identifier
     lat: float
     lon: float
@@ -55,34 +57,39 @@ class AgentTracker:
     Logs all decisions, movement, and energy changes.
     Auto-switches to another active agent when tracked agent stops.
     """
-    
+
     def __init__(self, agents: List[Agent], enabled: bool = True):
         self.enabled = enabled
         self.agents = agents
         self.tracked_id: Optional[int] = None
         self.log_lines: List[str] = []
-        
+
         if enabled and agents:
             self._select_random_agent()
-    
+
     def _select_random_agent(self):
         """Select a random active agent to track."""
         active = [a for a in self.agents if a.is_active]
         if active:
             import random
+
             agent = random.choice(active)
             self.tracked_id = agent.id
-            self._log(f"🎯 Now tracking Agent #{agent.id} (Strategy: {agent.strategy.value})")
-            self._log(f"   Start: ({agent.lat:.5f}, {agent.lon:.5f}) | Elev: {agent.elevation:.0f}m | Energy: {agent.energy:.0%}")
+            self._log(
+                f"🎯 Now tracking Agent #{agent.id} (Strategy: {agent.strategy.value})"
+            )
+            self._log(
+                f"   Start: ({agent.lat:.5f}, {agent.lon:.5f}) | Elev: {agent.elevation:.0f}m | Energy: {agent.energy:.0%}"
+            )
         else:
             self.tracked_id = None
             self._log("⚠️ No active agents to track")
-    
+
     def _log(self, msg: str):
         """Add to log and print."""
         self.log_lines.append(msg)
         logger.info(f"[TRACKER] {msg}")
-    
+
     def _get_tracked_agent(self) -> Optional[Agent]:
         """Get the currently tracked agent."""
         if self.tracked_id is None:
@@ -91,33 +98,28 @@ class AgentTracker:
             if a.id == self.tracked_id:
                 return a
         return None
-    
+
     def log_step_start(self, step: int):
         """Log at the start of a simulation step."""
         if not self.enabled:
             return
-        
+
         agent = self._get_tracked_agent()
         if agent is None or not agent.is_active:
             # Switch to another agent
             self._log(f"❌ Agent #{self.tracked_id} stopped - switching...")
             self._select_random_agent()
             agent = self._get_tracked_agent()
-        
+
         if agent:
             self._log(f"━━━ Step {step} | Agent #{agent.id} ━━━")
-    
-    def log_decision(
-        self,
-        agent_id: int,
-        decision_type: str,
-        details: str
-    ):
+
+    def log_decision(self, agent_id: int, decision_type: str, details: str):
         """Log a decision made by the tracked agent."""
         if not self.enabled or agent_id != self.tracked_id:
             return
         self._log(f"   📍 {decision_type}: {details}")
-    
+
     def log_movement(
         self,
         agent_id: int,
@@ -127,51 +129,55 @@ class AgentTracker:
         new_lon: float,
         distance_m: float,
         direction: str,
-        speed_mps: float
+        speed_mps: float,
     ):
         """Log movement of the tracked agent."""
         if not self.enabled or agent_id != self.tracked_id:
             return
         self._log(f"   🚶 Moved {direction}: {distance_m:.1f}m @ {speed_mps:.2f} m/s")
-        self._log(f"      ({old_lat:.5f}, {old_lon:.5f}) → ({new_lat:.5f}, {new_lon:.5f})")
-    
-    def log_energy(self, agent_id: int, old_energy: float, new_energy: float, reason: str):
+        self._log(
+            f"      ({old_lat:.5f}, {old_lon:.5f}) → ({new_lat:.5f}, {new_lon:.5f})"
+        )
+
+    def log_energy(
+        self, agent_id: int, old_energy: float, new_energy: float, reason: str
+    ):
         """Log energy change for tracked agent."""
         if not self.enabled or agent_id != self.tracked_id:
             return
-        
+
         change = new_energy - old_energy
         bar = self._energy_bar(new_energy)
         self._log(f"   ⚡ Energy: {bar} {new_energy:.0%} ({change:+.1%}) [{reason}]")
-    
+
     def log_stop(self, agent_id: int, reason: str):
         """Log when an agent stops."""
         if not self.enabled or agent_id != self.tracked_id:
             return
         self._log(f"   ⛔ STOPPED: {reason}")
-    
+
     def _energy_bar(self, energy: float) -> str:
         """Create visual energy bar."""
         filled = int(energy * 10)
         empty = 10 - filled
         return f"[{'█' * filled}{'░' * empty}]"
-    
+
     def get_summary(self) -> str:
         """Get summary of tracked agent's journey."""
         agent = self._get_tracked_agent()
         if not agent:
             return "No agent tracked"
-        
+
         return (
             f"Agent #{agent.id}: {agent.steps_taken} steps, "
             f"Energy: {agent.energy:.0%}, Active: {agent.is_active}"
         )
 
 
-
 @dataclass
 class SimulationResult:
     """Result of a simulation run."""
+
     time_slices: List[TimeSlice]
     final_positions: List[Tuple[float, float]]
     center_lat: float
@@ -284,14 +290,14 @@ def step_single_agent_pure(
     
     # Movement direction weights
     DIRECTIONS = [
-        (0, 1),    # North
-        (1, 1),    # NE
-        (1, 0),    # East
-        (1, -1),   # SE
-        (0, -1),   # South
+        (0, 1),  # North
+        (1, 1),  # NE
+        (1, 0),  # East
+        (1, -1),  # SE
+        (0, -1),  # South
         (-1, -1),  # SW
-        (-1, 0),   # West
-        (-1, 1),   # NW
+        (-1, 0),  # West
+        (-1, 1),  # NW
     ]
     
     # Increment step counter
@@ -465,7 +471,7 @@ class SARSimulator:
         self.terrain_pipeline = get_terrain_pipeline()
         self.osm_loader = get_osm_loader()
         self.weather_service = get_weather_service()
-    
+
     async def run_simulation(
         self,
         center_lat: float,
@@ -474,11 +480,11 @@ class SARSimulator:
         profile: HikerProfile,
         time_last_seen: Optional[datetime] = None,
         current_time: Optional[datetime] = None,
-        grid_size: int = 50
+        grid_size: int = 50,
     ) -> SimulationResult:
         """
         Run Monte Carlo simulation for SAR prediction.
-        
+
         Args:
             center_lat: Last known latitude
             center_lon: Last known longitude
@@ -487,7 +493,7 @@ class SARSimulator:
             time_last_seen: When person was last seen
             current_time: Current time (for elapsed calculation)
             grid_size: Output grid size (default 50x50)
-        
+
         Returns:
             SimulationResult with time series of probability distributions
         """
@@ -495,62 +501,71 @@ class SARSimulator:
             f"Starting SAR simulation: center=({center_lat:.4f}, {center_lon:.4f}), "
             f"radius={radius_km}km, agents={self.settings.num_agents}"
         )
-        
+
         # Load terrain
-        terrain = self.terrain_pipeline.load_terrain(
-            center_lat, center_lon, radius_km
-        )
+        terrain = self.terrain_pipeline.load_terrain(center_lat, center_lon, radius_km)
         sampler = TerrainSampler(terrain)
-        
+
         # Load OSM features
         osm_features = await self.osm_loader.fetch_features(terrain.bounds)
         feature_masks = self.osm_loader.rasterize_features(
             osm_features, terrain.shape, terrain.bounds
         )
-        
+
         # Get weather conditions
         elevation = sampler.elevation(center_lat, center_lon) or 1000.0
         weather = await self.weather_service.get_conditions(
             center_lat, center_lon, current_time, elevation
         )
-        
+
         # Calculate simulation duration
         if time_last_seen and current_time:
             # Strip timezone info for comparison (make both naive)
-            tls = time_last_seen.replace(tzinfo=None) if time_last_seen.tzinfo else time_last_seen
-            ct = current_time.replace(tzinfo=None) if current_time.tzinfo else current_time
+            tls = (
+                time_last_seen.replace(tzinfo=None)
+                if time_last_seen.tzinfo
+                else time_last_seen
+            )
+            ct = (
+                current_time.replace(tzinfo=None)
+                if current_time.tzinfo
+                else current_time
+            )
             elapsed = ct - tls
-            elapsed_minutes = int(elapsed.total_seconds() / 60)
+            elapsed_minutes = max(0, int(elapsed.total_seconds() / 60))  # Clamp to >= 0
         else:
             elapsed_minutes = 0
-        
+
         # Total simulation: from t=0 to t+8 hours (480 minutes max)
         # We generate heatmaps at 15-minute intervals
-        total_minutes = min(elapsed_minutes + (8 * 60), 480)  # Cap at 8 hours
+        total_minutes = max(
+            480, elapsed_minutes + (8 * 60)
+        )  # Always simulate at least 8 hours
+        total_minutes = min(total_minutes, 480)  # Cap at 8 hours
         num_steps = total_minutes // self.settings.timestep_minutes
-        
+
         logger.info(
             f"Simulating {num_steps} timesteps "
             f"({total_minutes} minutes total, {self.settings.num_agents} agents)"
         )
-        
+
         # Initialize agents at last known location
         agents = self._initialize_agents(
             center_lat, center_lon, sampler, self.settings.num_agents
         )
-        
+
         # Initialize agent tracker for debugging (set enabled=False to disable)
         tracker = AgentTracker(agents, enabled=True)
-        
+
         # Run simulation
         time_slices = []
-        
+
         for step in tqdm(range(num_steps), desc="Simulating", unit="step"):
             time_offset = step * self.settings.timestep_minutes
-            
+
             # Log step start for tracked agent
             tracker.log_step_start(step)
-            
+
             # Update agent positions
             agents = await self._step_agents(
                 agents, sampler, feature_masks, profile, weather, terrain, tracker
@@ -562,55 +577,47 @@ class SARSimulator:
             # Generate heatmap for this timestep
             heatmap = self._agents_to_heatmap(agents, terrain)
             grid = self._agents_to_grid(agents, terrain, grid_size)
-            
-            time_slices.append(TimeSlice(
-                time_offset_minutes=time_offset,
-                points=heatmap,
-                grid=grid
-            ))
-            
+
+            time_slices.append(
+                TimeSlice(time_offset_minutes=time_offset, points=heatmap, grid=grid)
+            )
+
             # Log progress periodically
             if step % 10 == 0:
                 active = sum(1 for a in agents if a.is_active)
                 logger.debug(f"Step {step}/{num_steps}: {active} active agents")
-        
+
         # Get final positions
-        final_positions = [
-            (a.lat, a.lon) for a in agents if a.is_active
-        ]
-        
+        final_positions = [(a.lat, a.lon) for a in agents if a.is_active]
+
         logger.info(
             f"Simulation complete: {len(time_slices)} time slices, "
             f"{len(final_positions)} active agents remaining"
         )
-        
+
         return SimulationResult(
             time_slices=time_slices,
             final_positions=final_positions,
             center_lat=center_lat,
             center_lon=center_lon,
-            radius_km=radius_km
+            radius_km=radius_km,
         )
-    
+
     def _initialize_agents(
-        self,
-        lat: float,
-        lon: float,
-        sampler: TerrainSampler,
-        num_agents: int
+        self, lat: float, lon: float, sampler: TerrainSampler, num_agents: int
     ) -> List[Agent]:
         """Initialize agents at the starting location with small spread."""
         agents = []
-        
+
         # Small initial spread (100m)
         spread = 0.001  # ~100m in degrees
-        
+
         for _ in range(num_agents):
             agent_lat = lat + random.gauss(0, spread / 3)
             agent_lon = lon + random.gauss(0, spread / 3)
-            
+
             elevation = sampler.elevation(agent_lat, agent_lon) or 0.0
-            
+
             # Assign strategy based on probabilities
             # DT: 55.9%, RT: 37.7%, RW: 5.5%, VE: 0.6%, SP: 0.3%
             r = random.random() * 100
@@ -628,18 +635,20 @@ class SARSimulator:
             # Assign random heading (radians, 0=North)
             heading = random.uniform(0, 2 * math.pi)
 
-            agents.append(Agent(
-                id=len(agents),  # Unique ID
-                lat=agent_lat,
-                lon=agent_lon,
-                elevation=elevation,
-                strategy=strategy,
-                heading=heading,
-                steps_taken=0,
-                energy=1.0,
-                is_active=True
-            ))
-        
+            agents.append(
+                Agent(
+                    id=len(agents),  # Unique ID
+                    lat=agent_lat,
+                    lon=agent_lon,
+                    elevation=elevation,
+                    strategy=strategy,
+                    heading=heading,
+                    steps_taken=0,
+                    energy=1.0,
+                    is_active=True,
+                )
+            )
+
         return agents
     
     async def _step_agents(
@@ -751,10 +760,7 @@ class SARSimulator:
         return all_agents
 
     def _latlon_to_index(
-        self,
-        lat: float,
-        lon: float,
-        terrain: TerrainModel
+        self, lat: float, lon: float, terrain: TerrainModel
     ) -> Tuple[int, int]:
         """Convert lat/lon to grid indices."""
         return _latlon_to_index(lat, lon, terrain)
@@ -769,112 +775,108 @@ class SARSimulator:
         return _is_valid_index(row, col, shape)
     
     def _agents_to_heatmap(
-        self,
-        agents: List[Agent],
-        terrain: TerrainModel
+        self, agents: List[Agent], terrain: TerrainModel
     ) -> List[Tuple[float, float, float]]:
         """
         Convert agent positions to heatmap points.
-        
+
         Returns list of (lat, lon, probability) tuples.
         """
         # Create density grid
         rows, cols = terrain.shape
         density = np.zeros((rows, cols), dtype=np.float32)
-        
+
         active_count = 0
         for agent in agents:
             if not agent.is_active:
                 continue
-            
+
             row, col = self._latlon_to_index(agent.lat, agent.lon, terrain)
             if self._is_valid_index(row, col, terrain.shape):
                 density[row, col] += 1
                 active_count += 1
-        
+
         if active_count == 0:
             return []
-        
+
         # Normalize to probabilities
         density /= active_count
-        
+
         # Apply Gaussian smoothing for visualization
         from scipy.ndimage import gaussian_filter
+
         density = gaussian_filter(density, sigma=0.5)
-        
+
         # Convert to list of points
         west, south, east, north = terrain.bounds
         lon_per_col = (east - west) / cols
         lat_per_row = (north - south) / rows
-        
+
         points = []
         threshold = 0.0001  # Minimum probability to include
-        
+
         for r in range(rows):
             for c in range(cols):
                 if density[r, c] > threshold:
                     lat = north - (r + 0.5) * lat_per_row
                     lon = west + (c + 0.5) * lon_per_col
                     points.append((lat, lon, float(density[r, c])))
-        
+
         # Normalize intensities to 0-1 range
         if points:
             max_intensity = max(p[2] for p in points)
             if max_intensity > 0:
                 points = [(p[0], p[1], p[2] / max_intensity) for p in points]
-        
+
         return points
-    
+
     def _agents_to_grid(
-        self,
-        agents: List[Agent],
-        terrain: TerrainModel,
-        grid_size: int = 50
+        self, agents: List[Agent], terrain: TerrainModel, grid_size: int = 50
     ) -> List[List[float]]:
         """
         Convert agent positions to a fixed-size probability grid.
-        
+
         Returns grid_size x grid_size matrix of probabilities (0-1).
         Row 0 is North, Row (grid_size-1) is South.
         Col 0 is West, Col (grid_size-1) is East.
         """
         from scipy.ndimage import gaussian_filter
-        
+
         # Create density grid at output resolution
         density = np.zeros((grid_size, grid_size), dtype=np.float32)
-        
+
         west, south, east, north = terrain.bounds
-        
+
         active_count = 0
         for agent in agents:
             if not agent.is_active:
                 continue
-            
+
             # Map agent position to grid cell
             col = int((agent.lon - west) / (east - west) * grid_size)
             row = int((north - agent.lat) / (north - south) * grid_size)
-            
+
             # Clamp to valid range
             col = max(0, min(col, grid_size - 1))
             row = max(0, min(row, grid_size - 1))
-            
+
             density[row, col] += 1
             active_count += 1
-        
+
         if active_count == 0:
             return [[0.0] * grid_size for _ in range(grid_size)]
-        
+
         # Normalize to probabilities
         density /= active_count
-        
+
         # Apply Gaussian smoothing
         density = gaussian_filter(density, sigma=0.5)
-        
+
         # Normalize to 0-1 range
         max_val = density.max()
         if max_val > 0:
             density /= max_val
-        
+
         # Convert to nested list
         return density.tolist()
 

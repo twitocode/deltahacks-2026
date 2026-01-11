@@ -7,53 +7,52 @@ interface MapboxHeatmapProps {
   onMapClick?: (lat: number, lng: number) => void;
   center?: [number, number];
   selectedPoint?: [number, number] | null;
+  is3D?: boolean;
 }
+
+// Style URLs
+const STYLE_3D = "mapbox://styles/mapbox/standard";
+const STYLE_2D = "mapbox://styles/mapbox/dark-v11";
 
 export default function MapboxHeatmap({
   data,
   onMapClick,
   center,
   selectedPoint,
+  is3D = true,
 }: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const dataRef = useRef<GeoJSON.FeatureCollection | undefined>(data);
+  const selectedPointRef = useRef<[number, number] | null | undefined>(
+    selectedPoint
+  );
+
+  // Keep refs in sync
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   useEffect(() => {
-    // @ts-ignore
-    mapboxgl.config.DISABLE_TELEMETRY = true;
-    mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY;
+    selectedPointRef.current = selectedPoint;
+  }, [selectedPoint]);
 
-    if (!mapContainerRef.current) return;
-
-    const initialCenter = center || [-120.6848, 48.3562];
-
-    const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: "mapbox://styles/mapbox/standard",
-      center: initialCenter,
-      zoom: 12,
-      pitch: 60, // Start steeper
-      minPitch: 60, // Force 3D view always
-      maxPitch: 85,
-      bearing: 0,
-    });
-
-    mapRef.current = map;
-
-    map.on("load", () => {
-      console.log("[MapboxHeatmap] Map loaded successfully.");
-      // Add Grid Source
+  // Helper to add our custom layers to the map
+  const addCustomLayers = (map: mapboxgl.Map) => {
+    // Add Grid Source
+    if (!map.getSource("sar-grid")) {
       map.addSource("sar-grid", {
         type: "geojson",
-        data: data || { type: "FeatureCollection", features: [] },
+        data: dataRef.current || { type: "FeatureCollection", features: [] },
       });
+    }
 
-      // --- CHOROPLETH (Grid) LAYER ---
+    // --- CHOROPLETH (Grid) LAYER ---
+    if (!map.getLayer("sar-grid-fill")) {
       map.addLayer({
         id: "sar-grid-fill",
         type: "fill",
         source: "sar-grid",
-        slot: "top", // Drapes over terrain in Standard style
         paint: {
           // Interpolate color based on probability - Green/Yellow/Orange/Red scheme
           "fill-color": [
@@ -79,28 +78,92 @@ export default function MapboxHeatmap({
           ],
           "fill-opacity": 0.65, // Semi-transparent so terrain is visible
           "fill-outline-color": "rgba(255,255,255,0.08)", // Very faint grid lines
+          "fill-emissive-strength": 1, // Makes colors vibrant in 3D night mode
         },
       });
+    }
 
-      // --- SELECTION MARKER ---
+    // --- SELECTION MARKER ---
+    if (!map.getSource("selection-point")) {
       map.addSource("selection-point", {
         type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
+        data: selectedPointRef.current
+          ? {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                    type: "Point",
+                    coordinates: selectedPointRef.current,
+                  },
+                },
+              ],
+            }
+          : { type: "FeatureCollection", features: [] },
       });
+    }
 
+    if (!map.getLayer("selection-point-layer")) {
       map.addLayer({
         id: "selection-point-layer",
         type: "circle",
         source: "selection-point",
-        slot: "top",
         paint: {
           "circle-radius": 8,
           "circle-color": "#ffffff",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#000000",
-          "circle-emissive-strength": 1,
+          "circle-emissive-strength": 1, // Makes color visible in 3D night mode
         },
       });
+    }
+  };
+
+  useEffect(() => {
+    // @ts-ignore
+    mapboxgl.config.DISABLE_TELEMETRY = true;
+    mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY;
+
+    if (!mapContainerRef.current) return;
+
+    const initialCenter = center || [-120.6848, 48.3562];
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: is3D ? STYLE_3D : STYLE_2D,
+      center: initialCenter,
+      zoom: 12,
+      pitch: is3D ? 60 : 0,
+      minPitch: 0,
+      maxPitch: 85,
+      bearing: 0,
+      // Configure dark mode for Standard style
+      ...(is3D && {
+        config: {
+          basemap: {
+            lightPreset: "night",
+          },
+        },
+      }),
+    });
+
+    mapRef.current = map;
+
+    map.on("style.load", () => {
+      console.log("[MapboxHeatmap] Style loaded.");
+
+      // Configure night mode for Standard style
+      if (map.getStyle()?.name?.includes("Standard") || is3D) {
+        try {
+          map.setConfigProperty("basemap", "lightPreset", "night");
+        } catch (e) {
+          // Ignore if not Standard style
+        }
+      }
+
+      addCustomLayers(map);
     });
 
     map.on("click", (e) => {
@@ -110,7 +173,6 @@ export default function MapboxHeatmap({
           6
         )}, Lng: ${lng.toFixed(6)}`
       );
-      // Parent component handles the point state via onMapClick
       if (onMapClick) onMapClick(lat, lng);
     });
 
@@ -143,7 +205,6 @@ export default function MapboxHeatmap({
     ) as mapboxgl.GeoJSONSource;
     if (source) {
       if (selectedPoint) {
-        // console.log("[MapboxHeatmap] Updating selection point:", selectedPoint);
         source.setData({
           type: "FeatureCollection",
           features: [
@@ -160,6 +221,38 @@ export default function MapboxHeatmap({
     }
   }, [selectedPoint]);
 
+  // Reactive 3D/2D style toggle
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    const newStyle = is3D ? STYLE_3D : STYLE_2D;
+    console.log(
+      `[MapboxHeatmap] Switching to ${is3D ? "3D Standard" : "2D Dark"} style`
+    );
+
+    // Set the new style
+    map.setStyle(newStyle).once("style.load", () => {
+      // Configure night mode for Standard style
+      if (is3D) {
+        try {
+          map.setConfigProperty("basemap", "lightPreset", "night");
+        } catch (e) {
+          // Ignore if not Standard style
+        }
+      }
+
+      // Re-add our custom layers after style change
+      addCustomLayers(map);
+
+      // Animate to appropriate pitch
+      map.easeTo({
+        pitch: is3D ? 60 : 0,
+        duration: 500,
+      });
+    });
+  }, [is3D]);
+
   // Reactive Center Update
   useEffect(() => {
     if (!mapRef.current || !center) return;
@@ -167,7 +260,7 @@ export default function MapboxHeatmap({
     mapRef.current.flyTo({
       center: center,
       zoom: 12,
-      pitch: 60, // Maintain 3D pitch
+      pitch: is3D ? 60 : 0,
       essential: true,
     });
   }, [center]);

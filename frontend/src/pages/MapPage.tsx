@@ -28,6 +28,7 @@ function MapPage() {
   });
   const [timeOffset, setTimeOffset] = useState(0); // Minutes from last seen
   const [isOnline, setIsOnline] = useState(true);
+  const [is3D, setIs3D] = useState(true); // 3D/2D view toggle
 
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
@@ -89,6 +90,8 @@ function MapPage() {
         data.metadata
       );
       setServerData(data);
+      setTimeOffset(0); // Reset timeline to start
+      setIsPlaying(false); // Stop any playback
       setMapCenter([
         data.metadata.origin.longitude,
         data.metadata.origin.latitude,
@@ -114,21 +117,13 @@ function MapPage() {
       return;
     }
 
-    const skillMap: { [key: string]: number } = {
-      novice: 1,
-      intermediate: 3,
-      experienced: 4,
-      expert: 5,
-    };
-
     const payload = {
-      created_at: new Date().toISOString(),
       latitude: lat,
       longitude: lng,
       time_last_seen: new Date(formData.timeLastSeen).toISOString(),
-      age: formData.age || "30",
-      gender: formData.sex || "unknown",
-      skill_level: skillMap[formData.experience] || 3,
+      age: formData.age ? parseInt(formData.age, 10) : 35,
+      sex: formData.sex || "unknown",
+      experience: formData.experience || "novice",
     };
 
     console.log(
@@ -332,20 +327,65 @@ function MapPage() {
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        <div className="absolute top-4 right-4 z-50 bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
-          <div
-            className={`w-3 h-3 rounded-full ${
-              isOnline ? "bg-green-500" : "bg-red-500"
-            } animate-pulse`}
-          />
-          <span className="text-white text-sm font-medium">
-            {isOnline ? "Online" : "Offline"}
-          </span>
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
+          {/* 2D/3D Toggle Button */}
+          <button
+            onClick={() => setIs3D(!is3D)}
+            className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg hover:bg-[#2a2a2a] transition-colors cursor-pointer"
+            title={is3D ? "Switch to 2D" : "Switch to 3D"}
+          >
+            {is3D ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-white"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"
+                />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-white"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z"
+                />
+              </svg>
+            )}
+            <span className="text-white text-sm font-medium">
+              {is3D ? "3D" : "2D"}
+            </span>
+          </button>
+          {/* Online Status */}
+          <div className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+            <div
+              className={`w-3 h-3 rounded-full ${
+                isOnline ? "bg-green-500" : "bg-red-500"
+              } animate-pulse`}
+            />
+            <span className="text-white text-sm font-medium">
+              {isOnline ? "Online" : "Offline"}
+            </span>
+          </div>
         </div>
         <div className="w-full h-full">
           <MapboxHeatmap
             data={heatmapGeoJson}
             center={mapCenter}
+            is3D={is3D}
             selectedPoint={
               !isNaN(parseFloat(formData.latitude)) &&
               !isNaN(parseFloat(formData.longitude))
