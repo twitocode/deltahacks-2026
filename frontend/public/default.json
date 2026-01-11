@@ -1,0 +1,18 @@
+{
+  "type": "FeatureCollection",
+  "feature": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        // [latitude, longitude]
+        "coordinates": [125.6, 10.1]
+      },
+      "properties": {
+        //properties here will be used to determine the heatmap weights
+        //this is the probability that the prediction is correct, we can use other weights as well if you want
+        "probability": 0.85
+      }
+    }
+  ]
+}
