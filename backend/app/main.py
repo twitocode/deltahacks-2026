@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -19,6 +21,7 @@ from app.simulation.simulator import get_simulator
 from app.terrain.terrain_pipeline import get_terrain_pipeline
 from app.terrain.terrain_sampler import TerrainSampler
 from app.dem.dem_loader import get_dem_loader
+from app.utils.logging import RequestTimeMiddleware, timed_operation
 
 # Configure logging
 logging.basicConfig(
@@ -68,6 +71,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestTimeMiddleware)
 
 
 # Response Models
