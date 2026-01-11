@@ -13,8 +13,8 @@ interface MapboxHeatmapProps {
 
 // Style URLs
 const STYLE_3D = "mapbox://styles/mapbox/standard";
-const STYLE_2D_DARK = "mapbox://styles/mapbox/dark-v11";
-const STYLE_2D_LIGHT = "mapbox://styles/mapbox/light-v11";
+const STYLE_2D_DARK = "mapbox://styles/mapbox/navigation-night-v1";
+const STYLE_2D_LIGHT = "mapbox://styles/mapbox/streets-v12";
 
 export default function MapboxHeatmap({
   data,
@@ -31,6 +31,8 @@ export default function MapboxHeatmap({
   const selectedPointRef = useRef<[number, number] | null | undefined>(
     selectedPoint
   );
+  // Spin state
+  const isSpinningRef = useRef(!center && !selectedPoint);
 
   // Keep refs in sync
   useEffect(() => {
@@ -125,6 +127,20 @@ export default function MapboxHeatmap({
     }
   };
 
+  const addTerrain = (map: mapboxgl.Map) => {
+    // Add terrain source if it doesn't exist
+    if (!map.getSource("mapbox-dem")) {
+      map.addSource("mapbox-dem", {
+        type: "raster-dem",
+        url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+        tileSize: 512,
+        maxzoom: 14,
+      });
+    }
+    // Enable terrain processing
+    map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
+  };
+
   useEffect(() => {
     // @ts-ignore
     mapboxgl.config.DISABLE_TELEMETRY = true;
@@ -132,17 +148,20 @@ export default function MapboxHeatmap({
 
     if (!mapContainerRef.current) return;
 
-    const initialCenter = center || [-120.6848, 48.3562];
+    // Default to globe view if no center provided
+    const initialCenter = center || ([-40, 20] as [number, number]);
+    const initialZoom = center ? 12 : 1.5;
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: is3D ? STYLE_3D : isDarkMode ? STYLE_2D_DARK : STYLE_2D_LIGHT,
       center: initialCenter,
-      zoom: 12,
+      zoom: initialZoom,
       pitch: is3D ? 60 : 0,
       minPitch: 0,
       maxPitch: 85,
       bearing: 0,
+      projection: { name: "globe" },
       // Configure light preset for Standard style
       ...(is3D && {
         config: {
@@ -170,6 +189,18 @@ export default function MapboxHeatmap({
           // Ignore if not Standard style
         }
       }
+
+      map.setFog({
+        range: [1.0, 10.0],
+        color: "rgb(11, 11, 25)",
+        "high-color": "rgb(36, 92, 223)",
+        "space-color": "rgb(11, 11, 25)",
+        "horizon-blend": 0.05,
+        "star-intensity": 0.6,
+      });
+
+      // Add terrain to all styles (even 2D ones)
+      addTerrain(map);
 
       addCustomLayers(map);
     });
@@ -221,6 +252,42 @@ export default function MapboxHeatmap({
       map.getCanvas().style.cursor = "";
       popup.remove();
     });
+
+    // Spin Globe Logic
+    if (isSpinningRef.current) {
+      let userInteracting = false;
+      let frameId: number;
+
+      const spinGlobe = () => {
+        if (!isSpinningRef.current || userInteracting) {
+          return;
+        }
+
+        const zoom = map.getZoom();
+        if (zoom < 5) {
+          const center = map.getCenter();
+          // Decrease longitude to spin (approx 0.1 deg per frame for visible speed)
+          center.lng -= 0.1;
+          map.setCenter(center);
+        }
+        frameId = requestAnimationFrame(spinGlobe);
+      };
+
+      // Stop spinning on interaction
+      const stopSpin = () => {
+        userInteracting = true;
+        isSpinningRef.current = false;
+        if (frameId) cancelAnimationFrame(frameId);
+      };
+
+      map.on("mousedown", stopSpin);
+      map.on("dragstart", stopSpin);
+      map.on("touchstart", stopSpin);
+      map.on("wheel", stopSpin);
+      map.on("click", stopSpin);
+
+      spinGlobe();
+    }
 
     return () => {
       console.log("[MapboxHeatmap] Removing map instance.");
@@ -298,6 +365,9 @@ export default function MapboxHeatmap({
         }
       }
 
+      // Add terrain to all styles
+      addTerrain(map);
+
       // Re-add our custom layers after style change
       addCustomLayers(map);
 
@@ -312,6 +382,10 @@ export default function MapboxHeatmap({
   // Reactive Center Update
   useEffect(() => {
     if (!mapRef.current || !center) return;
+
+    // Stop spinning if we fly to a new center
+    isSpinningRef.current = false;
+
     console.log("[MapboxHeatmap] Flying to new center:", center);
     mapRef.current.flyTo({
       center: center,
