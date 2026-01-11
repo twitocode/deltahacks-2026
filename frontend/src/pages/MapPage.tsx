@@ -11,6 +11,7 @@ interface FormData {
   age: string;
   sex: string;
   experience: string;
+  timeLastSeen: string;
 }
 
 function MapPage() {
@@ -20,21 +21,29 @@ function MapPage() {
     age: "",
     sex: "",
     experience: "",
+    timeLastSeen: new Date().toISOString().slice(0, 16),
   });
-  const [timeOffset, setTimeOffset] = useState(0); // Hours from last seen
+  const [timeOffset, setTimeOffset] = useState(0); // Minutes from last seen
   const [isOnline, setIsOnline] = useState(true);
   
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
   
+  // Calculate dynamic max time from server data
+  const maxMinutes = useMemo(() => {
+    if (!serverData) return 720; // Default to 12h if no data
+    const keys = Object.keys(serverData.predictions).map(parseFloat);
+    const maxHour = Math.max(...keys, 0);
+    return maxHour * 60;
+  }, [serverData]);
+
   // Derived GeoJSON for the map (re-calculated when time or data changes)
   const heatmapGeoJson = useMemo(() => {
     if (!serverData) return undefined;
-    const timeVal = Math.abs(timeOffset);
-    // Use fallback key "0" if exact time key missing
+    const timeValHours = timeOffset / 60;
     // convertServerGridToGeoJSON now handles the string conversion internally for the key lookup
     // but expects a number for the argument.
-    return convertServerGridToGeoJSON(serverData, timeVal) || convertServerGridToGeoJSON(serverData, 0);
+    return convertServerGridToGeoJSON(serverData, timeValHours);
   }, [serverData, timeOffset]);
 
   // Center of the map
@@ -82,7 +91,7 @@ function MapPage() {
       created_at: new Date().toISOString(),
       latitude: lat,
       longitude: lng,
-      time_last_seen: new Date().toISOString(),
+      time_last_seen: new Date(formData.timeLastSeen).toISOString(),
       age: formData.age || "30",
       gender: formData.sex || "unknown",
       skill_level: skillMap[formData.experience] || 3,
@@ -117,12 +126,12 @@ function MapPage() {
       
       playbackIntervalRef.current = setInterval(() => {
         setTimeOffset((prev) => {
-          if (prev >= 12) {
-            console.log("[MapPage] Playback reached end (12h). Stopping.");
+          if (prev >= maxMinutes) {
+            console.log(`[MapPage] Playback reached end (${maxMinutes}m). Stopping.`);
             setIsPlaying(false);
-            return 12;
+            return maxMinutes;
           }
-          return prev + 1;
+          return prev + 15;
         });
       }, intervalMs);
     } else {
@@ -135,7 +144,7 @@ function MapPage() {
     return () => {
       if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
     };
-  }, [isPlaying, playbackSpeed]);
+  }, [isPlaying, playbackSpeed, maxMinutes]);
 
   const handlePlayPause = () => {
     if (!serverData) {
@@ -143,7 +152,7 @@ function MapPage() {
       alert("Please click 'Find Person' first.");
       return;
     }
-    if (timeOffset >= 12 && !isPlaying) {
+    if (timeOffset >= maxMinutes && !isPlaying) {
       console.log("[MapPage] Restarting playback from 0.");
       setTimeOffset(0);
     }
@@ -159,14 +168,20 @@ function MapPage() {
   const handleSkipToEnd = () => {
     console.log("[MapPage] Skipping to end.");
     setIsPlaying(false);
-    setTimeOffset(12);
+    setTimeOffset(maxMinutes);
   };
 
   const handleSpeedChange = (speed: number) => {
     console.log(`[MapPage] Changing playback speed to ${speed}x`);
     setPlaybackSpeed(speed);
   };
-  const formatTimeLabel = (hours: number) => `+${hours} hours`;
+  const formatTimeLabel = (minutes: number) => {
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hrs === 0) return `+${mins}m`;
+    if (mins === 0) return `+${hrs}h`;
+    return `+${hrs}h ${mins}m`;
+  };
 
   return (
     <div className="flex h-screen w-full bg-black font-['Open_Sans']">
@@ -238,6 +253,15 @@ function MapPage() {
               <option value="expert">Expert</option>
             </select>
           </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">Time Last Seen</label>
+            <input
+              type="datetime-local"
+              value={formData.timeLastSeen}
+              onChange={(e) => handleInputChange("timeLastSeen", e.target.value)}
+              className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors"
+            />
+          </div>
         </div>
         <button
           onClick={handleFindPerson}
@@ -297,12 +321,37 @@ function MapPage() {
           <div className="relative mx-auto max-w-4xl">
             <div className="relative h-8">
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-600 transform -translate-y-1/2" />
-              <div className="absolute top-0 left-0 right-0 h-full flex justify-between items-center">{Array.from({ length: 13 }, (_, i) => (<div key={i} className="flex flex-col items-center"><div className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"} bg-gray-500`} /></div>))}</div>
-              <input type="range" min="0" max="12" value={timeOffset} onChange={(e) => setTimeOffset(parseInt(e.target.value))} className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer z-10" />
-              <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 pointer-events-none" style={{ left: `${(timeOffset / 12) * 100}%` }}><div className="w-4 h-4 bg-white rounded-full border-2 border-gray-400 shadow-lg" /></div>
+              <div className="absolute top-0 left-0 right-0 h-full flex justify-between items-center">
+                {Array.from({ length: Math.floor(maxMinutes / 60) + 1 }, (_, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"} bg-gray-500`} />
+                  </div>
+                ))}
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max={maxMinutes} 
+                step="15" 
+                value={timeOffset} 
+                onChange={(e) => setTimeOffset(parseInt(e.target.value))} 
+                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer z-10" 
+              />
+              <div 
+                className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 pointer-events-none" 
+                style={{ left: `${(timeOffset / maxMinutes) * 100}%` }}
+              >
+                <div className="w-4 h-4 bg-white rounded-full border-2 border-gray-400 shadow-lg" />
+              </div>
             </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-400 font-jetbrains"><span>+0h</span><span>+3h</span><span>+6h</span><span>+9h</span><span>+12h</span></div>
-            <div className="text-center mt-2"><span className="text-gray-300 text-xs font-jetbrains">Current: {formatTimeLabel(timeOffset)}</span></div>
+            <div className="flex justify-between mt-2 text-xs text-gray-400 font-jetbrains">
+              {Array.from({ length: Math.floor(maxMinutes / 180) + 1 }, (_, i) => (
+                <span key={i}>+{i * 3}h</span>
+              ))}
+            </div>
+            <div className="text-center mt-2">
+              <span className="text-gray-300 text-xs font-jetbrains">Current: {formatTimeLabel(timeOffset)}</span>
+            </div>
           </div>
         </div>
       </div>
