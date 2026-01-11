@@ -146,9 +146,9 @@ class SARSimulator:
         else:
             elapsed_minutes = 0
         
-        # Total simulation: from t=0 to t+12 hours
+        # Total simulation: from t=0 to t+8 hours (480 minutes max)
         # We generate heatmaps at 15-minute intervals
-        total_minutes = elapsed_minutes + (12 * 60)  # +12 hours ahead
+        total_minutes = min(elapsed_minutes + (8 * 60), 480)  # Cap at 8 hours
         num_steps = total_minutes // self.settings.timestep_minutes
         
         logger.info(
