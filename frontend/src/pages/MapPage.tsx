@@ -21,6 +21,7 @@ declare module "leaflet" {
 
 import { fetchPrediction } from "../api";
 import { useMutation } from "@tanstack/react-query";
+import Logo from "../components/Logo";
 
 // Remove the placeholder function completely and use the imported fetchPrediction
 
@@ -360,24 +361,8 @@ function MapPage() {
       {/* Sidebar */}
       <div className="w-80 bg-[#1a1a1a] p-6 flex flex-col border-r border-gray-800">
         {/* Logo */}
-        <div className="flex items-center gap-2 mb-12">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-7 h-7 text-white"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418"
-            />
-          </svg>
-          <span className="text-xl font-semibold text-white tracking-wide">
-            Beacon AI
-          </span>
+        <div className="mb-12">
+          <Logo className="w-8 h-8 rounded-lg" />
         </div>
 
         {/* Instructions */}
@@ -390,7 +375,7 @@ function MapPage() {
           {/* Latitude & Longitude Row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -421,7 +406,7 @@ function MapPage() {
               />
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -451,7 +436,7 @@ function MapPage() {
           {/* Age & Sex Row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -477,7 +462,7 @@ function MapPage() {
               />
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -509,7 +494,7 @@ function MapPage() {
 
           {/* Experience */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5">
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -544,7 +529,7 @@ function MapPage() {
         <button
           onClick={handleFindPerson}
           disabled={isPending}
-          className="mt-8 w-full bg-transparent border border-gray-600 text-white py-3 rounded-md font-medium text-sm hover:bg-gray-800 hover:border-gray-500 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-8 w-full bg-transparent border border-gray-600 text-white py-3 rounded-md font-medium text-sm hover:bg-gray-700 hover:border-gray-500 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? "Searching..." : "Find Person"}
         </button>
@@ -593,7 +578,7 @@ function MapPage() {
                   onClick={() => handleSpeedChange(speed)}
                   className={`px-2 py-1 text-xs rounded transition-colors ${playbackSpeed === speed
                     ? "bg-white text-black"
-                    : "bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]"
+                    : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
                     }`}
                 >
                   {speed}x
@@ -628,7 +613,7 @@ function MapPage() {
               {/* Play/Pause */}
               <button
                 onClick={handlePlayPause}
-                className="p-3 bg-white text-black rounded-full hover:bg-gray-200 transition-colors"
+                className="p-3 bg-white text-black rounded-full hover:bg-gray-100 transition-colors"
                 title={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
@@ -688,7 +673,7 @@ function MapPage() {
             </div>
 
             {/* Timeline Label */}
-            <span className="text-white text-sm font-medium bg-[#2a2a2a] px-4 py-1.5 rounded-full">
+            <span className="text-white text-sm font-medium bg-[#2a2a2a] px-4 py-1.5 rounded-full font-jetbrains">
               Timeline
             </span>
           </div>
@@ -731,7 +716,7 @@ function MapPage() {
             </div>
 
             {/* Labels */}
-            <div className="flex justify-between mt-2 text-xs text-gray-400">
+            <div className="flex justify-between mt-2 text-xs text-gray-400 font-jetbrains">
               <span>-6 hours</span>
               <span>-3 hours</span>
               <span>+0</span>
@@ -741,7 +726,7 @@ function MapPage() {
 
             {/* Current Value Display */}
             <div className="text-center mt-2">
-              <span className="text-gray-300 text-xs">
+              <span className="text-gray-300 text-xs font-jetbrains">
                 Current: {formatTimeLabel(timeOffset)}
               </span>
             </div>

@@ -19,6 +19,7 @@ body {
 }
 
 @theme {
+  --font-jetbrains: "JetBrains Mono", monospace;
   --animate-fade-in-up: fade-in-up 0.5s ease-out forwards;
 
   @keyframes fade-in-up {
