@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { useEffect, useRef, useState } from "react";
 
 interface MapboxHeatmapProps {
   data?: GeoJSON.FeatureCollection;
@@ -8,10 +8,16 @@ interface MapboxHeatmapProps {
   center?: [number, number];
 }
 
-export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatmapProps) {
+export default function MapboxHeatmap({
+  data,
+  onMapClick,
+  center,
+}: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(
+    null
+  );
 
   useEffect(() => {
     // @ts-ignore
@@ -50,20 +56,30 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
         source: "sar-grid",
         slot: "top", // Drapes over terrain in Standard style
         paint: {
-          // Interpolate color based on probability
+          // Interpolate color based on probability - Green/Yellow/Orange/Red scheme
           "fill-color": [
             "interpolate",
             ["linear"],
             ["get", "probability"],
-            0.05, "rgba(33,102,172,0)",   // Transparent threshold
-            0.2, "rgb(103,169,207)",      // Blue (Low)
-            0.4, "rgb(209,229,240)",      // Light Blue
-            0.6, "rgb(253,219,199)",      // Peach
-            0.8, "rgb(239,138,98)",       // Orange
-            1.0, "rgb(178,24,43)"         // Red (High)
+            0.01,
+            "rgba(34,139,34,0)", // Transparent threshold (forest green)
+            0.1,
+            "rgb(144,238,144)", // Light Green (Low)
+            0.25,
+            "rgb(173,255,47)", // Green-Yellow
+            0.4,
+            "rgb(255,255,0)", // Yellow
+            0.55,
+            "rgb(255,215,0)", // Gold
+            0.7,
+            "rgb(255,165,0)", // Orange
+            0.85,
+            "rgb(255,69,0)", // Orange-Red
+            1.0,
+            "rgb(220,20,60)", // Crimson (High)
           ],
-          "fill-opacity": 0.6, // Semi-transparent so terrain is visible
-          "fill-outline-color": "rgba(255,255,255,0.05)" // Very faint grid lines
+          "fill-opacity": 0.65, // Semi-transparent so terrain is visible
+          "fill-outline-color": "rgba(255,255,255,0.08)", // Very faint grid lines
         },
       });
 
@@ -90,7 +106,11 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
 
     map.on("click", (e) => {
       const { lng, lat } = e.lngLat;
-      console.log(`[MapboxHeatmap] Map clicked at Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`);
+      console.log(
+        `[MapboxHeatmap] Map clicked at Lat: ${lat.toFixed(
+          6
+        )}, Lng: ${lng.toFixed(6)}`
+      );
       setSelectedPoint([lng, lat]);
       if (onMapClick) onMapClick(lat, lng);
     });
@@ -104,9 +124,14 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   // Reactive Data Update (Grid)
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
-    const source = mapRef.current.getSource("sar-grid") as mapboxgl.GeoJSONSource;
+    const source = mapRef.current.getSource(
+      "sar-grid"
+    ) as mapboxgl.GeoJSONSource;
     if (source && data) {
-      console.log("[MapboxHeatmap] Updating grid data source. Feature count:", data.features.length);
+      console.log(
+        "[MapboxHeatmap] Updating grid data source. Feature count:",
+        data.features.length
+      );
       source.setData(data);
     }
   }, [data]);
@@ -114,17 +139,21 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   // Reactive Selection Update
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
-    const source = mapRef.current.getSource("selection-point") as mapboxgl.GeoJSONSource;
+    const source = mapRef.current.getSource(
+      "selection-point"
+    ) as mapboxgl.GeoJSONSource;
     if (source) {
       if (selectedPoint) {
         // console.log("[MapboxHeatmap] Updating selection point:", selectedPoint);
         source.setData({
           type: "FeatureCollection",
-          features: [{
-            type: "Feature",
-            properties: {},
-            geometry: { type: "Point", coordinates: selectedPoint },
-          }],
+          features: [
+            {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "Point", coordinates: selectedPoint },
+            },
+          ],
         });
       } else {
         source.setData({ type: "FeatureCollection", features: [] });
@@ -140,7 +169,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
       center: center,
       zoom: 12,
       pitch: 60, // Maintain 3D pitch
-      essential: true
+      essential: true,
     });
   }, [center]);
 
