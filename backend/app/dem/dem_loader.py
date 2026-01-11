@@ -287,33 +287,58 @@ class MeritDEMLoader:
         """
         Get elevation data for a search area.
         
-        Enforces single-tile constraint.
+        Enforces single-tile constraint by clipping bounds to the center tile.
         """
-        # Validate single tile
-        tile_lat, tile_lon = self.validate_single_tile(center_lat, center_lon, radius_km)
+        # Get center tile coordinates
+        tile_lat = math.floor(center_lat)
+        tile_lon = math.floor(center_lon)
         
         # Load tile (from cache or download)
         tile = self.load_tile(tile_lat, tile_lon)
         
-        # Calculate actual bounds
+        # Calculate requested bounds
         delta_lat = radius_km / 111.0
         delta_lon = radius_km / (111.0 * abs(math.cos(math.radians(center_lat))))
         
-        bounds = (
-            center_lon - delta_lon,
-            center_lat - delta_lat,
-            center_lon + delta_lon,
-            center_lat + delta_lat
-        )
+        req_west = center_lon - delta_lon
+        req_east = center_lon + delta_lon
+        req_south = center_lat - delta_lat
+        req_north = center_lat + delta_lat
+        
+        # Clip to tile bounds (with small buffer inside to avoid rounding errors)
+        tile_west, tile_south, tile_east, tile_north = self.get_tile_bounds(tile_lat, tile_lon)
+        
+        clipped_west = max(req_west, tile_west + 0.0001)
+        clipped_east = min(req_east, tile_east - 0.0001)
+        clipped_south = max(req_south, tile_south + 0.0001)
+        clipped_north = min(req_north, tile_north - 0.0001)
+        
+        # Check if we clipped significantly
+        if (clipped_west > req_west or clipped_east < req_east or 
+            clipped_south > req_south or clipped_north < req_north):
+            logger.warning(
+                f"Search area clipped to tile bounds ({tile_lat}, {tile_lon}). "
+                f"Requested radius: {radius_km}km"
+            )
+        
+        bounds = (clipped_west, clipped_south, clipped_east, clipped_north)
         
         # Extract window from cached tile
         window = from_bounds(*bounds, tile.transform)
         
         # Convert to integer indices
-        row_start = max(0, int(window.row_off))
-        row_end = min(tile.data.shape[0], int(window.row_off + window.height))
-        col_start = max(0, int(window.col_off))
-        col_end = min(tile.data.shape[1], int(window.col_off + window.width))
+        row_start = max(0, int(math.floor(window.row_off)))
+        row_end = min(tile.data.shape[0], int(math.ceil(window.row_off + window.height)))
+        col_start = max(0, int(math.floor(window.col_off)))
+        col_end = min(tile.data.shape[1], int(math.ceil(window.col_off + window.width)))
+        
+        # Handle case where clipping resulted in empty/invalid window
+        if row_start >= row_end or col_start >= col_end:
+             # Fallback to a small window around center if completely invalid
+             logger.warning("Empty window after clipping, falling back to small center window")
+             row, col = rasterio.transform.rowcol(tile.transform, center_lon, center_lat)
+             row_start, row_end = max(0, row-50), min(tile.data.shape[0], row+50)
+             col_start, col_end = max(0, col-50), min(tile.data.shape[1], col+50)
         
         elevation = tile.data[row_start:row_end, col_start:col_end].copy()
         
@@ -328,9 +353,16 @@ class MeritDEMLoader:
             tile.transform.f + row_start * tile.transform.e
         )
         
+        # Recalculate actual field bounds from the pixel window
+        # This ensures alignment
+        actual_west = win_transform.c
+        actual_north = win_transform.f
+        actual_east = actual_west + (col_end - col_start) * win_transform.a
+        actual_south = actual_north + (row_end - row_start) * win_transform.e
+        
         metadata = DEMMetadata(
             crs=tile.crs,
-            bounds=bounds,
+            bounds=(actual_west, actual_south, actual_east, actual_north),
             transform=win_transform,
             shape=elevation.shape,
             nodata=-9999.0
