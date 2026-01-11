@@ -125,7 +125,7 @@ async def health_check():
     return await root()
 
 
-@app.post("/v1/search", response_model=SearchResponseV1)
+@app.post("/api/v1/search", response_model=SearchResponseV1)
 async def search_v1(request: SearchRequest):
     """
     Run SAR probability simulation (API v1).
