@@ -1,5 +1,5 @@
 """
-Configuration module for the Beacon.ai SAR Prediction Backend.
+Configuration module for the WayPoint SAR Prediction Backend.
 Loads environment variables and provides application settings.
 """
 

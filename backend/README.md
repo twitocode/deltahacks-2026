@@ -1,4 +1,4 @@
-# Beacon.ai SAR Prediction Backend
+# WayPoint SAR Prediction Backend
 
 The backend service for the Search and Rescue (SAR) probability prediction system. It utilizes Monte Carlo simulations, high-resolution elevation data (DEM), and OpenStreetMap features to predict the location of missing hikers.
 

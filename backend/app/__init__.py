@@ -1,1 +1,1 @@
-# Beacon.ai SAR Prediction Backend
+# WayPoint SAR Prediction Backend

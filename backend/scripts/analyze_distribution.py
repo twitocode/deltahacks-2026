@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Probability Distribution Analyzer for Beacon.ai Search API
+Probability Distribution Analyzer for WayPoint Search API
 
 Fetches predictions from the /api/v1/search endpoint and analyzes
 the distribution of probability values across the grid.

@@ -1,5 +1,5 @@
 """
-Beacon.ai SAR Prediction Backend
+WayPoint SAR Prediction Backend
 
 FastAPI application for Search and Rescue probability prediction.
 """
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
     # Startup
-    logger.info("Starting Beacon.ai SAR Prediction Backend")
+    logger.info("Starting WayPoint SAR Prediction Backend")
     settings = get_settings()
     logger.info(f"DEM data directory: {settings.dem_data_path}")
     logger.info(f"Max radius: {settings.max_radius_km}km")
@@ -50,12 +50,12 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down Beacon.ai SAR Prediction Backend")
+    logger.info("Shutting down WayPoint SAR Prediction Backend")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="Beacon.ai SAR Prediction API",
+    title="WayPoint SAR Prediction API",
     description="Search and Rescue probability prediction using terrain analysis and Monte Carlo simulation",
     version="1.0.0",
     lifespan=lifespan,
