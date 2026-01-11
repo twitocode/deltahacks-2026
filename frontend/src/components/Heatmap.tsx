@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -14,6 +14,8 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(null);
 
   useEffect(() => {
+    // @ts-ignore
+    mapboxgl.config.DISABLE_TELEMETRY = true;
     mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY;
 
     if (!mapContainerRef.current) return;
@@ -128,11 +130,11 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   // Reactive Center Update
   useEffect(() => {
     if (!mapRef.current || !center) return;
-    mapRef.current.flyTo({ 
-      center: center, 
-      zoom: 12, 
+    mapRef.current.flyTo({
+      center: center,
+      zoom: 12,
       pitch: 60, // Maintain 3D pitch
-      essential: true 
+      essential: true
     });
   }, [center]);
 
