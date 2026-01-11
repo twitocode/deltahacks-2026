@@ -97,6 +97,7 @@ function MapPage() {
     null
   );
   const [showPlayWarning, setShowPlayWarning] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -204,6 +205,10 @@ function MapPage() {
       playbackIntervalRef.current = setInterval(() => {
         setTimeOffset((prev) => {
           if (prev >= maxMinutes) {
+            if (isLooping) {
+              console.log(`[MapPage] Looping playback from start.`);
+              return 0;
+            }
             console.log(
               `[MapPage] Playback reached end (${maxMinutes}m). Stopping.`
             );
@@ -224,7 +229,7 @@ function MapPage() {
       if (playbackIntervalRef.current)
         clearInterval(playbackIntervalRef.current);
     };
-  }, [isPlaying, playbackSpeed, maxMinutes]);
+  }, [isPlaying, playbackSpeed, maxMinutes, isLooping]);
 
   const handlePlayPause = () => {
     if (!serverData) {
@@ -654,6 +659,26 @@ function MapPage() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={() => setIsLooping(!isLooping)}
+                className={`p-2 transition-colors ${isLooping ? "text-white" : "text-gray-400 hover:text-white"}`}
+                title={isLooping ? "Disable loop" : "Enable loop"}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
                   />
                 </svg>
               </button>
