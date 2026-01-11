@@ -26,6 +26,7 @@ export default function MapboxHeatmap({
 }: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
   const dataRef = useRef<GeoJSON.FeatureCollection | undefined>(data);
   const selectedPointRef = useRef<[number, number] | null | undefined>(
     selectedPoint
@@ -183,6 +184,44 @@ export default function MapboxHeatmap({
       if (onMapClick) onMapClick(lat, lng);
     });
 
+    // Create popup for hover tooltips
+    const popup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      className: "probability-popup",
+    });
+    popupRef.current = popup;
+
+    // Add hover event for grid layer
+    map.on("mousemove", "sar-grid-fill", (e) => {
+      if (e.features && e.features.length > 0) {
+        const feature = e.features[0];
+        const probability = feature.properties?.probability;
+
+        if (probability !== undefined && probability > 0.01) {
+          map.getCanvas().style.cursor = "pointer";
+
+          // Format probability as percentage
+          const percentStr = (probability * 100).toFixed(1) + "%";
+
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="font-weight: 500; font-size: 13px;">Probability: <span style="color: #FF6B6B;">${percentStr}</span></div>`
+            )
+            .addTo(map);
+        } else {
+          popup.remove();
+          map.getCanvas().style.cursor = "";
+        }
+      }
+    });
+
+    map.on("mouseleave", "sar-grid-fill", () => {
+      map.getCanvas().style.cursor = "";
+      popup.remove();
+    });
+
     return () => {
       console.log("[MapboxHeatmap] Removing map instance.");
       map.remove();
@@ -282,5 +321,22 @@ export default function MapboxHeatmap({
     });
   }, [center]);
 
-  return <div id="map" ref={mapContainerRef} style={{ height: "100%" }}></div>;
+  return (
+    <>
+      <style>{`
+        .probability-popup .mapboxgl-popup-content {
+          background: rgba(26, 26, 26, 0.95);
+          color: white;
+          padding: 8px 12px;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .probability-popup .mapboxgl-popup-tip {
+          border-top-color: rgba(26, 26, 26, 0.95);
+        }
+      `}</style>
+      <div id="map" ref={mapContainerRef} style={{ height: "100%" }}></div>
+    </>
+  );
 }
