@@ -8,11 +8,13 @@ interface MapboxHeatmapProps {
   center?: [number, number];
   selectedPoint?: [number, number] | null;
   is3D?: boolean;
+  isDarkMode?: boolean;
 }
 
 // Style URLs
 const STYLE_3D = "mapbox://styles/mapbox/standard";
-const STYLE_2D = "mapbox://styles/mapbox/dark-v11";
+const STYLE_2D_DARK = "mapbox://styles/mapbox/dark-v11";
+const STYLE_2D_LIGHT = "mapbox://styles/mapbox/light-v11";
 
 export default function MapboxHeatmap({
   data,
@@ -20,6 +22,7 @@ export default function MapboxHeatmap({
   center,
   selectedPoint,
   is3D = true,
+  isDarkMode = true,
 }: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -112,7 +115,7 @@ export default function MapboxHeatmap({
         source: "selection-point",
         paint: {
           "circle-radius": 8,
-          "circle-color": "#ffffff",
+          "circle-color": "#FF00FF",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#000000",
           "circle-emissive-strength": 1, // Makes color visible in 3D night mode
@@ -132,18 +135,18 @@ export default function MapboxHeatmap({
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: is3D ? STYLE_3D : STYLE_2D,
+      style: is3D ? STYLE_3D : isDarkMode ? STYLE_2D_DARK : STYLE_2D_LIGHT,
       center: initialCenter,
       zoom: 12,
       pitch: is3D ? 60 : 0,
       minPitch: 0,
       maxPitch: 85,
       bearing: 0,
-      // Configure dark mode for Standard style
+      // Configure light preset for Standard style
       ...(is3D && {
         config: {
           basemap: {
-            lightPreset: "night",
+            lightPreset: isDarkMode ? "night" : "day",
           },
         },
       }),
@@ -154,10 +157,14 @@ export default function MapboxHeatmap({
     map.on("style.load", () => {
       console.log("[MapboxHeatmap] Style loaded.");
 
-      // Configure night mode for Standard style
+      // Configure light preset for Standard style
       if (map.getStyle()?.name?.includes("Standard") || is3D) {
         try {
-          map.setConfigProperty("basemap", "lightPreset", "night");
+          map.setConfigProperty(
+            "basemap",
+            "lightPreset",
+            isDarkMode ? "night" : "day"
+          );
         } catch (e) {
           // Ignore if not Standard style
         }
@@ -221,22 +228,32 @@ export default function MapboxHeatmap({
     }
   }, [selectedPoint]);
 
-  // Reactive 3D/2D style toggle
+  // Reactive 3D/2D and dark/light mode toggle
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    const newStyle = is3D ? STYLE_3D : STYLE_2D;
+    const newStyle = is3D
+      ? STYLE_3D
+      : isDarkMode
+      ? STYLE_2D_DARK
+      : STYLE_2D_LIGHT;
     console.log(
-      `[MapboxHeatmap] Switching to ${is3D ? "3D Standard" : "2D Dark"} style`
+      `[MapboxHeatmap] Switching to ${is3D ? "3D" : "2D"} ${
+        isDarkMode ? "Dark" : "Light"
+      } style`
     );
 
     // Set the new style
     map.setStyle(newStyle).once("style.load", () => {
-      // Configure night mode for Standard style
+      // Configure light preset for Standard style
       if (is3D) {
         try {
-          map.setConfigProperty("basemap", "lightPreset", "night");
+          map.setConfigProperty(
+            "basemap",
+            "lightPreset",
+            isDarkMode ? "night" : "day"
+          );
         } catch (e) {
           // Ignore if not Standard style
         }
@@ -251,7 +268,7 @@ export default function MapboxHeatmap({
         duration: 500,
       });
     });
-  }, [is3D]);
+  }, [is3D, isDarkMode]);
 
   // Reactive Center Update
   useEffect(() => {

@@ -29,6 +29,7 @@ function MapPage() {
   const [timeOffset, setTimeOffset] = useState(0); // Minutes from last seen
   const [isOnline, setIsOnline] = useState(true);
   const [is3D, setIs3D] = useState(true); // 3D/2D view toggle
+  const [isDarkMode, setIsDarkMode] = useState(true); // Light/Dark mode toggle
 
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
@@ -47,6 +48,41 @@ function MapPage() {
     // timeOffset is already in minutes, pass directly
     return convertServerGridToGeoJSON(serverData, timeOffset);
   }, [serverData, timeOffset]);
+
+  // Form validation - all fields required
+  const isFormValid = useMemo(() => {
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+    return (
+      !isNaN(lat) &&
+      !isNaN(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180 &&
+      formData.age.trim() !== "" &&
+      !isNaN(parseInt(formData.age, 10)) &&
+      formData.sex !== "" &&
+      formData.experience !== "" &&
+      formData.timeLastSeen !== ""
+    );
+  }, [formData]);
+
+  // Track which fields have errors (for showing red borders)
+  const [showErrors, setShowErrors] = useState(false);
+
+  const fieldErrors = useMemo(() => {
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+    return {
+      latitude: isNaN(lat) || lat < -90 || lat > 90,
+      longitude: isNaN(lng) || lng < -180 || lng > 180,
+      age: formData.age.trim() === "" || isNaN(parseInt(formData.age, 10)),
+      sex: formData.sex === "",
+      experience: formData.experience === "",
+      timeLastSeen: formData.timeLastSeen === "",
+    };
+  }, [formData]);
 
   // Center of the map
   const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(
@@ -108,14 +144,18 @@ function MapPage() {
       "[MapPage] handleFindPerson initiated with form data:",
       formData
     );
-    const lat = parseFloat(formData.latitude);
-    const lng = parseFloat(formData.longitude);
 
-    if (isNaN(lat) || isNaN(lng)) {
-      console.warn("[MapPage] Invalid coordinates entered.");
-      alert("Please enter valid latitude and longitude coordinates.");
+    // Show errors if form is invalid
+    if (!isFormValid) {
+      setShowErrors(true);
       return;
     }
+
+    // Clear errors on successful validation
+    setShowErrors(false);
+
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
 
     const payload = {
       latitude: lat,
@@ -241,7 +281,11 @@ function MapPage() {
                 type="text"
                 value={formData.latitude}
                 onChange={(e) => handleInputChange("latitude", e.target.value)}
-                className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors"
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
+                  showErrors && fieldErrors.latitude
+                    ? "border-red-500"
+                    : "border-gray-700 focus:border-gray-500"
+                }`}
               />
             </div>
             <div>
@@ -252,7 +296,11 @@ function MapPage() {
                 type="text"
                 value={formData.longitude}
                 onChange={(e) => handleInputChange("longitude", e.target.value)}
-                className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors"
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
+                  showErrors && fieldErrors.longitude
+                    ? "border-red-500"
+                    : "border-gray-700 focus:border-gray-500"
+                }`}
               />
             </div>
           </div>
@@ -265,7 +313,11 @@ function MapPage() {
                 type="number"
                 value={formData.age}
                 onChange={(e) => handleInputChange("age", e.target.value)}
-                className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors"
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
+                  showErrors && fieldErrors.age
+                    ? "border-red-500"
+                    : "border-gray-700 focus:border-gray-500"
+                }`}
                 placeholder="e.g. 35"
               />
             </div>
@@ -276,7 +328,11 @@ function MapPage() {
               <select
                 value={formData.sex}
                 onChange={(e) => handleInputChange("sex", e.target.value)}
-                className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors appearance-none cursor-pointer"
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${
+                  showErrors && fieldErrors.sex
+                    ? "border-red-500"
+                    : "border-gray-700 focus:border-gray-500"
+                }`}
               >
                 <option value="">Select...</option>
                 <option value="male">Male</option>
@@ -292,7 +348,11 @@ function MapPage() {
             <select
               value={formData.experience}
               onChange={(e) => handleInputChange("experience", e.target.value)}
-              className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors appearance-none cursor-pointer"
+              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${
+                showErrors && fieldErrors.experience
+                  ? "border-red-500"
+                  : "border-gray-700 focus:border-gray-500"
+              }`}
             >
               <option value="">Select level...</option>
               <option value="novice">Novice</option>
@@ -311,7 +371,11 @@ function MapPage() {
               onChange={(e) =>
                 handleInputChange("timeLastSeen", e.target.value)
               }
-              className="w-full bg-[#2a2a2a] border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-gray-500 transition-colors"
+              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
+                showErrors && fieldErrors.timeLastSeen
+                  ? "border-red-500"
+                  : "border-gray-700 focus:border-gray-500"
+              }`}
             />
           </div>
         </div>
@@ -369,6 +433,44 @@ function MapPage() {
               {is3D ? "3D" : "2D"}
             </span>
           </button>
+          {/* Light/Dark Mode Toggle */}
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg hover:bg-[#2a2a2a] transition-colors cursor-pointer"
+            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {isDarkMode ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-white"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
+                />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-yellow-400"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                />
+              </svg>
+            )}
+          </button>
           {/* Online Status */}
           <div className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
             <div
@@ -386,6 +488,7 @@ function MapPage() {
             data={heatmapGeoJson}
             center={mapCenter}
             is3D={is3D}
+            isDarkMode={isDarkMode}
             selectedPoint={
               !isNaN(parseFloat(formData.latitude)) &&
               !isNaN(parseFloat(formData.longitude))
@@ -538,10 +641,11 @@ function MapPage() {
               </div>
             </div>
             <div className="flex justify-between mt-2 text-xs text-gray-400 font-jetbrains">
+              {/* Show labels every 2 hours for better accuracy */}
               {Array.from(
-                { length: Math.floor(maxMinutes / 180) + 1 },
+                { length: Math.floor(maxMinutes / 120) + 1 },
                 (_, i) => (
-                  <span key={i}>+{i * 3}h</span>
+                  <span key={i}>+{i * 2}h</span>
                 )
               )}
             </div>
