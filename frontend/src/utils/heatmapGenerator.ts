@@ -18,6 +18,7 @@ export interface ServerGridResponse {
 // Creates hotspots that "grow" branching paths outward
 export const generateFakeServerResponse = (center: [number, number]): ServerGridResponse => {
   console.log(`[HeatmapGen] Generating fake server response for center: ${center}`);
+  const genStart = performance.now();
   const gridSize = 50; // 300x300 high res
   const cellSizeMeters = 50; // 20m cells
   
@@ -35,6 +36,8 @@ export const generateFakeServerResponse = (center: [number, number]): ServerGrid
 
   // 1. Plant Seeds (Hotspots)
   const seeds = 8; // Number of distinct hotspots
+  console.log(`[HeatmapGen] Planting ${seeds} seeds...`);
+
   for (let k = 0; k < seeds; k++) {
     // Scatter seeds around the center, but not too far
     const sx = Math.floor(150 + (Math.random() - 0.5) * 100);
@@ -49,8 +52,10 @@ export const generateFakeServerResponse = (center: [number, number]): ServerGrid
   // 2. Spread (BFS)
   // Directions: Up, Down, Left, Right
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  let iterations = 0;
 
   while (queue.length > 0) {
+    iterations++;
     // Pop random element to make growth more organic (instead of standard FIFO)
     const idx = Math.floor(Math.random() * queue.length);
     const [cx, cy, val] = queue.splice(idx, 1)[0];
@@ -78,6 +83,9 @@ export const generateFakeServerResponse = (center: [number, number]): ServerGrid
     }
   }
 
+  const genEnd = performance.now();
+  console.log(`[HeatmapGen] Generation complete. Iterations: ${iterations}, Time: ${(genEnd - genStart).toFixed(2)}ms`);
+
   // Create mock response
   return {
     metadata: {
@@ -104,8 +112,7 @@ export const convertServerGridToGeoJSON = (
   response: ServerGridResponse, 
   timeValue: number = 0
 ): GeoJSON.FeatureCollection => {
-  // console.log(`[HeatmapGen] Converting grid to GeoJSON for time: ${timeValue}`);
-  console.log(`[HeatmapGen] Converting grid to GeoJSON for time: ${timeValue.toFixed(2)}`);
+  const convStart = performance.now();
   const features: GeoJSON.Feature[] = [];
   const { origin, grid_width, grid_height, cell_size_meters } = response.metadata;
   
@@ -120,9 +127,15 @@ export const convertServerGridToGeoJSON = (
   const startLng = origin.longitude - (grid_width * lngStep) / 2;
   const startLat = origin.latitude - (grid_height * latStep) / 2;
 
+  const hourKey = String(timeValue);
   const gridData = response.predictions[hourKey] || response.predictions["0"];
 
-  if (!gridData) return { type: "FeatureCollection", features: [] };
+  console.log(`[HeatmapGen] Converting grid to GeoJSON for time: ${timeValue} (key: ${hourKey})`);
+
+  if (!gridData) {
+    console.warn(`[HeatmapGen] No grid data found for time ${timeValue}`);
+    return { type: "FeatureCollection", features: [] };
+  }
 
   for (let j = 0; j < grid_height; j++) {
     for (let i = 0; i < grid_width; i++) {
@@ -155,6 +168,9 @@ export const convertServerGridToGeoJSON = (
       });
     }
   }
+
+  const convEnd = performance.now();
+  console.log(`[HeatmapGen] Conversion complete. Features: ${features.length}, Time: ${(convEnd - convStart).toFixed(2)}ms`);
 
   return {
     type: "FeatureCollection",

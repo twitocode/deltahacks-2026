@@ -36,6 +36,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
     mapRef.current = map;
 
     map.on("load", () => {
+      console.log("[MapboxHeatmap] Map loaded successfully.");
       // Add Grid Source
       map.addSource("sar-grid", {
         type: "geojson",
@@ -89,11 +90,13 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
 
     map.on("click", (e) => {
       const { lng, lat } = e.lngLat;
+      console.log(`[MapboxHeatmap] Map clicked at Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`);
       setSelectedPoint([lng, lat]);
       if (onMapClick) onMapClick(lat, lng);
     });
 
     return () => {
+      console.log("[MapboxHeatmap] Removing map instance.");
       map.remove();
     };
   }, []);
@@ -103,6 +106,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
     const source = mapRef.current.getSource("sar-grid") as mapboxgl.GeoJSONSource;
     if (source && data) {
+      console.log("[MapboxHeatmap] Updating grid data source. Feature count:", data.features.length);
       source.setData(data);
     }
   }, [data]);
@@ -113,6 +117,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
     const source = mapRef.current.getSource("selection-point") as mapboxgl.GeoJSONSource;
     if (source) {
       if (selectedPoint) {
+        // console.log("[MapboxHeatmap] Updating selection point:", selectedPoint);
         source.setData({
           type: "FeatureCollection",
           features: [{
@@ -130,6 +135,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   // Reactive Center Update
   useEffect(() => {
     if (!mapRef.current || !center) return;
+    console.log("[MapboxHeatmap] Flying to new center:", center);
     mapRef.current.flyTo({
       center: center,
       zoom: 12,

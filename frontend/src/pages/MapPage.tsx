@@ -30,9 +30,11 @@ function MapPage() {
   // Derived GeoJSON for the map (re-calculated when time or data changes)
   const heatmapGeoJson = useMemo(() => {
     if (!serverData) return undefined;
-    const key = String(Math.abs(timeOffset));
+    const timeVal = Math.abs(timeOffset);
     // Use fallback key "0" if exact time key missing
-    return convertServerGridToGeoJSON(serverData, key) || convertServerGridToGeoJSON(serverData, "0");
+    // convertServerGridToGeoJSON now handles the string conversion internally for the key lookup
+    // but expects a number for the argument.
+    return convertServerGridToGeoJSON(serverData, timeVal) || convertServerGridToGeoJSON(serverData, 0);
   }, [serverData, timeOffset]);
 
   // Center of the map
@@ -51,21 +53,23 @@ function MapPage() {
   const { mutate: getPrediction, isPending } = useMutation({
     mutationFn: fetchPrediction,
     onSuccess: (data) => {
-      console.log("Prediction received:", data);
+      console.log("[MapPage] Prediction received successfully. Metadata:", data.metadata);
       setServerData(data);
       setMapCenter([data.metadata.origin.longitude, data.metadata.origin.latitude]);
     },
     onError: (error) => {
-      console.error("Error fetching prediction:", error);
+      console.error("[MapPage] Error fetching prediction:", error);
       alert("Failed to fetch prediction data.");
     }
   });
 
   const handleFindPerson = () => {
+    console.log("[MapPage] handleFindPerson initiated with form data:", formData);
     const lat = parseFloat(formData.latitude);
     const lng = parseFloat(formData.longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
+      console.warn("[MapPage] Invalid coordinates entered.");
       alert("Please enter valid latitude and longitude coordinates.");
       return;
     }
@@ -83,13 +87,20 @@ function MapPage() {
       gender: formData.sex || "unknown",
       skill_level: skillMap[formData.experience] || 3,
     };
-
+    
+    console.log("[MapPage] Dispatching prediction request with payload:", payload);
     getPrediction(payload);
   };
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      console.log("[MapPage] Network status: Online");
+      setIsOnline(true);
+    };
+    const handleOffline = () => {
+      console.warn("[MapPage] Network status: Offline");
+      setIsOnline(false);
+    };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
@@ -102,9 +113,12 @@ function MapPage() {
     if (isPlaying) {
       if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
       const intervalMs = 1000 / playbackSpeed;
+      console.log(`[MapPage] Starting playback. Speed: ${playbackSpeed}x, Interval: ${intervalMs}ms`);
+      
       playbackIntervalRef.current = setInterval(() => {
         setTimeOffset((prev) => {
           if (prev >= 12) {
+            console.log("[MapPage] Playback reached end (12h). Stopping.");
             setIsPlaying(false);
             return 12;
           }
@@ -113,6 +127,7 @@ function MapPage() {
       }, intervalMs);
     } else {
       if (playbackIntervalRef.current) {
+        console.log("[MapPage] Pausing playback.");
         clearInterval(playbackIntervalRef.current);
         playbackIntervalRef.current = null;
       }
@@ -124,24 +139,33 @@ function MapPage() {
 
   const handlePlayPause = () => {
     if (!serverData) {
+      console.warn("[MapPage] Play clicked but no data loaded.");
       alert("Please click 'Find Person' first.");
       return;
     }
-    if (timeOffset >= 12 && !isPlaying) setTimeOffset(0);
+    if (timeOffset >= 12 && !isPlaying) {
+      console.log("[MapPage] Restarting playback from 0.");
+      setTimeOffset(0);
+    }
     setIsPlaying(!isPlaying);
   };
 
   const handleSkipToStart = () => {
+    console.log("[MapPage] Skipping to start.");
     setIsPlaying(false);
     setTimeOffset(0);
   };
 
   const handleSkipToEnd = () => {
+    console.log("[MapPage] Skipping to end.");
     setIsPlaying(false);
     setTimeOffset(12);
   };
 
-  const handleSpeedChange = (speed: number) => setPlaybackSpeed(speed);
+  const handleSpeedChange = (speed: number) => {
+    console.log(`[MapPage] Changing playback speed to ${speed}x`);
+    setPlaybackSpeed(speed);
+  };
   const formatTimeLabel = (hours: number) => `+${hours} hours`;
 
   return (

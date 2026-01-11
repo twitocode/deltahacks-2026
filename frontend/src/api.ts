@@ -20,22 +20,36 @@ export async function fetchPrediction(payload: {
   longitude: number;
   [key: string]: any;
 }): Promise<ServerGridResponse> {
+  console.log("[API] fetchPrediction called with payload:", payload);
+  const startTime = performance.now();
+
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/search`, {
+    const url = `${API_BASE_URL}/v1/search`;
+    console.log(`[API] sending POST request to ${url}`);
+    
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
     });
-    return await handleResponse(response);
+    
+    const data = await handleResponse(response);
+    const endTime = performance.now();
+    console.log(`[API] fetchPrediction success in ${(endTime - startTime).toFixed(2)}ms`);
+    return data;
   } catch (error) {
-    console.warn("API Request failed, returning mock Gaussian grid:", error);
+    const endTime = performance.now();
+    console.warn(`[API] fetchPrediction failed after ${(endTime - startTime).toFixed(2)}ms. Error:`, error);
+    console.log("[API] Falling back to mock data generator...");
 
     // FALLBACK: Generate fake data at the requested location
     // The delay simulates a network request for better UX feel
     await new Promise((resolve) => setTimeout(resolve, 800));
 
-    return generateFakeServerResponse([payload.longitude, payload.latitude]);
+    const mockData = generateFakeServerResponse([payload.longitude, payload.latitude]);
+    console.log("[API] Mock data generated successfully.");
+    return mockData;
   }
 }
