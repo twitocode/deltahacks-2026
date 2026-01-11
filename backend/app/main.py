@@ -171,8 +171,8 @@ async def search_v1(request: SearchRequest):
         
         # Convert time slices to minute-keyed predictions (consistent 15-min intervals)
         predictions: dict[str, List[List[float]]] = {}
-        # Every 15 minutes from 0 to 720 minutes (12 hours)
-        target_minutes_list = list(range(0, 721, 15))  # [0, 15, 30, ... 720]
+        # Every 15 minutes from 0 to 480 minutes (8 hours max)
+        target_minutes_list = list(range(0, 481, 15))  # [0, 15, 30, ... 480]
         
         for target_minutes in target_minutes_list:
             # Find closest time slice

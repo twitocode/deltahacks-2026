@@ -292,11 +292,11 @@ class SARSimulator:
         if agent.steps_taken > 4:
             # Calculate stop probability per step to reach target
             if agent.steps_taken > 96:
-                stop_prob = 0.15  # High chance each step
+                stop_prob = 0.05  # Lowered from 0.15
             elif agent.steps_taken > 20:
-                stop_prob = 0.05  # Medium chance
+                stop_prob = 0.02  # Lowered from 0.05
             else:
-                stop_prob = 0.02  # Low chance
+                stop_prob = 0.005  # Lowered from 0.02
             
             if random.random() < stop_prob:
                 agent.is_active = False
@@ -517,7 +517,7 @@ class SARSimulator:
         
         # Apply Gaussian smoothing for visualization
         from scipy.ndimage import gaussian_filter
-        density = gaussian_filter(density, sigma=0.8)
+        density = gaussian_filter(density, sigma=0.5)
         
         # Convert to list of points
         west, south, east, north = terrain.bounds
@@ -585,7 +585,7 @@ class SARSimulator:
         density /= active_count
         
         # Apply Gaussian smoothing
-        density = gaussian_filter(density, sigma=0.8)
+        density = gaussian_filter(density, sigma=0.5)
         
         # Normalize to 0-1 range
         max_val = density.max()
