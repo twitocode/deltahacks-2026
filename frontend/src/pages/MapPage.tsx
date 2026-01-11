@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPrediction } from "../api";
-import Logo from "../components/Logo";
 import MapboxHeatmap from "../components/Heatmap";
-import { convertServerGridToGeoJSON, type ServerGridResponse } from "../utils/heatmapGenerator";
+import Logo from "../components/Logo";
+import {
+  convertServerGridToGeoJSON,
+  type ServerGridResponse,
+} from "../utils/heatmapGenerator";
 
 interface FormData {
   latitude: string;
@@ -23,10 +26,10 @@ function MapPage() {
   });
   const [timeOffset, setTimeOffset] = useState(0); // Hours from last seen (0, 1, 3...)
   const [isOnline, setIsOnline] = useState(true);
-  
+
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
-  
+
   // Derived GeoJSON for the map (re-calculated when time or data changes)
   const heatmapGeoJson = useMemo(() => {
     if (!serverData) return undefined;
@@ -38,12 +41,16 @@ function MapPage() {
   }, [serverData, timeOffset]);
 
   // Center of the map to control view programmatically
-  const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(undefined);
+  const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(
+    undefined
+  );
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1); // 0.5, 1, or 2
-  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
 
   // Handle form input changes
   const handleInputChange = (field: keyof FormData, value: string) => {
@@ -56,12 +63,15 @@ function MapPage() {
     onSuccess: (data) => {
       console.log("Prediction received:", data);
       setServerData(data);
-      setMapCenter([data.metadata.origin.longitude, data.metadata.origin.latitude]);
+      setMapCenter([
+        data.metadata.origin.longitude,
+        data.metadata.origin.latitude,
+      ]);
     },
     onError: (error) => {
       console.error("Error fetching prediction:", error);
       alert("Failed to fetch prediction data.");
-    }
+    },
   });
 
   // Find person handler
@@ -75,10 +85,10 @@ function MapPage() {
     }
 
     const skillMap: { [key: string]: number } = {
-      'novice': 1,
-      'intermediate': 3,
-      'experienced': 4,
-      'expert': 5
+      novice: 1,
+      intermediate: 3,
+      experienced: 4,
+      expert: 5,
     };
 
     const payload = {
@@ -271,7 +281,9 @@ function MapPage() {
       <div className="flex-1 relative">
         <div className="absolute top-4 right-4 z-50 bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
           <div
-            className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"} animate-pulse`}
+            className={`w-3 h-3 rounded-full ${
+              isOnline ? "bg-green-500" : "bg-red-500"
+            } animate-pulse`}
           />
           <span className="text-white text-sm font-medium">
             {isOnline ? "Online" : "Offline"}
@@ -280,17 +292,17 @@ function MapPage() {
 
         {/* MapboxHeatmap */}
         <div className="w-full h-full">
-           <MapboxHeatmap 
-             data={heatmapGeoJson} 
-             center={mapCenter}
-             onMapClick={(lat, lng) => {
-               setFormData(prev => ({
-                 ...prev,
-                 latitude: lat.toFixed(6),
-                 longitude: lng.toFixed(6)
-               }));
-             }}
-           />
+          <MapboxHeatmap
+            data={heatmapGeoJson}
+            center={mapCenter}
+            onMapClick={(lat, lng) => {
+              setFormData((prev) => ({
+                ...prev,
+                latitude: lat.toFixed(6),
+                longitude: lng.toFixed(6),
+              }));
+            }}
+          />
         </div>
 
         {/* Timeline Slider */}
@@ -301,10 +313,11 @@ function MapPage() {
                 <button
                   key={speed}
                   onClick={() => handleSpeedChange(speed)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${playbackSpeed === speed
-                    ? "bg-white text-black"
-                    : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
-                    }`}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    playbackSpeed === speed
+                      ? "bg-white text-black"
+                      : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
+                  }`}
                 >
                   {speed}x
                 </button>
@@ -317,8 +330,19 @@ function MapPage() {
                 className="p-2 text-gray-400 hover:text-white transition-colors"
                 title="Skip to start"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+                  />
                 </svg>
               </button>
 
@@ -328,12 +352,34 @@ function MapPage() {
                 title={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.75 5.25v13.5m-7.5-13.5v13.5"
+                    />
                   </svg>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
+                    />
                   </svg>
                 )}
               </button>
@@ -343,8 +389,19 @@ function MapPage() {
                 className="p-2 text-gray-400 hover:text-white transition-colors"
                 title="Skip to end"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5"
+                  />
                 </svg>
               </button>
             </div>
@@ -360,7 +417,11 @@ function MapPage() {
               <div className="absolute top-0 left-0 right-0 h-full flex justify-between items-center">
                 {Array.from({ length: 13 }, (_, i) => (
                   <div key={i} className="flex flex-col items-center">
-                    <div className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"} bg-gray-500`} />
+                    <div
+                      className={`w-0.5 ${
+                        i % 3 === 0 ? "h-4" : "h-2"
+                      } bg-gray-500`}
+                    />
                   </div>
                 ))}
               </div>

@@ -15,29 +15,39 @@ export interface ServerGridResponse {
 }
 
 // --- Gaussian Generator (Returns RAW MATRIX, not GeoJSON) ---
-export const generateFakeServerResponse = (center: [number, number]): ServerGridResponse => {
+export const generateFakeServerResponse = (
+  center: [number, number]
+): ServerGridResponse => {
   const gridSize = 50;
   const cellSizeMeters = 500;
-  
+
   // Define "Hotspots" (Gaussian Centers) relative to index (0-50)
   // Center of grid is 25,25
   const hotspots = [
     { x: 25, y: 25, intensity: 1.0, spread: 4.0 }, // Main (Center)
     { x: 35, y: 30, intensity: 0.7, spread: 6.0 }, // Secondary
     { x: 15, y: 10, intensity: 0.5, spread: 8.0 }, // Wide wander
-    { x: 40, y: 15, intensity: 0.6, spread: 3.0 }  // Small cluster
+    { x: 40, y: 15, intensity: 0.6, spread: 3.0 }, // Small cluster
   ];
 
-  const gaussian = (x: number, y: number, cx: number, cy: number, spread: number) => {
+  const gaussian = (
+    x: number,
+    y: number,
+    cx: number,
+    cy: number,
+    spread: number
+  ) => {
     const d2 = Math.pow(x - cx, 2) + Math.pow(y - cy, 2);
     return Math.exp(-d2 / (2 * spread * spread));
   };
 
   const grid: number[][] = [];
 
-  for (let j = 0; j < gridSize; j++) { // Rows (Latitude)
+  for (let j = 0; j < gridSize; j++) {
+    // Rows (Latitude)
     const row: number[] = [];
-    for (let i = 0; i < gridSize; i++) { // Cols (Longitude)
+    for (let i = 0; i < gridSize; i++) {
+      // Cols (Longitude)
       let probability = 0;
       for (const h of hotspots) {
         probability += h.intensity * gaussian(i, j, h.x, h.y, h.spread);
@@ -58,32 +68,33 @@ export const generateFakeServerResponse = (center: [number, number]): ServerGrid
       cell_size_meters: cellSizeMeters,
       origin: {
         latitude: center[1],
-        longitude: center[0]
-      }
+        longitude: center[0],
+      },
     },
     predictions: {
       "0": grid,
-      "1": grid.map(r => r.map(v => v * 0.9)), // Fake decay for hour 1
-      "3": grid.map(r => r.map(v => v * 0.7)), // Fake decay for hour 3
-      "6": grid.map(r => r.map(v => v * 0.5)),
-      "12": grid.map(r => r.map(v => v * 0.3)),
-    }
+      "1": grid.map((r) => r.map((v) => v * 0.9)), // Fake decay for hour 1
+      "3": grid.map((r) => r.map((v) => v * 0.7)), // Fake decay for hour 3
+      "6": grid.map((r) => r.map((v) => v * 0.5)),
+      "12": grid.map((r) => r.map((v) => v * 0.3)),
+    },
   };
 };
 
 // --- Adapter: Converts Server Response -> Mapbox GeoJSON ---
 export const convertServerGridToGeoJSON = (
-  response: ServerGridResponse, 
+  response: ServerGridResponse,
   hourKey: string = "0"
 ): GeoJSON.FeatureCollection => {
   const features: GeoJSON.Feature[] = [];
-  const { origin, grid_width, grid_height, cell_size_meters } = response.metadata;
-  
+  const { origin, grid_width, grid_height, cell_size_meters } =
+    response.metadata;
+
   // Approx conversion: 1 degree lat ~ 111,000 meters
   // 1 degree lng ~ 111,000 * cos(lat) meters
   const metersPerDegLat = 111000;
   const metersPerDegLng = 111000 * Math.cos(origin.latitude * (Math.PI / 180));
-  
+
   const latStep = cell_size_meters / metersPerDegLat;
   const lngStep = cell_size_meters / metersPerDegLng;
 
@@ -118,13 +129,15 @@ export const convertServerGridToGeoJSON = (
         },
         geometry: {
           type: "Polygon",
-          coordinates: [[
-            [minLng, minLat],
-            [maxLng, minLat],
-            [maxLng, maxLat],
-            [minLng, maxLat],
-            [minLng, minLat] // Close loop
-          ]],
+          coordinates: [
+            [
+              [minLng, minLat],
+              [maxLng, minLat],
+              [maxLng, maxLat],
+              [minLng, maxLat],
+              [minLng, minLat], // Close loop
+            ],
+          ],
         },
       });
     }

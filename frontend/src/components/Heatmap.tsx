@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { useEffect, useRef, useState } from "react";
 
 interface MapboxHeatmapProps {
   data?: GeoJSON.FeatureCollection;
@@ -8,10 +8,16 @@ interface MapboxHeatmapProps {
   center?: [number, number]; // Optional center to fly to
 }
 
-export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatmapProps) {
+export default function MapboxHeatmap({
+  data,
+  onMapClick,
+  center,
+}: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(
+    null
+  );
 
   useEffect(() => {
     mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY;
@@ -50,15 +56,21 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
             "interpolate",
             ["linear"],
             ["get", "probability"],
-            0.15, "rgba(33,102,172,0)",   // Transparent at low prob
-            0.3, "rgb(103,169,207)",      // Blue
-            0.5, "rgb(209,229,240)",      // Light Blue
-            0.7, "rgb(253,219,199)",      // Light Orange
-            0.85, "rgb(239,138,98)",      // Orange
-            1.0, "rgb(178,24,43)"         // Red
+            0.15,
+            "rgba(33,102,172,0)", // Transparent at low prob
+            0.3,
+            "rgb(103,169,207)", // Blue
+            0.5,
+            "rgb(209,229,240)", // Light Blue
+            0.7,
+            "rgb(253,219,199)", // Light Orange
+            0.85,
+            "rgb(239,138,98)", // Orange
+            1.0,
+            "rgb(178,24,43)", // Red
           ],
           "fill-opacity": 0.7,
-          "fill-outline-color": "rgba(255,255,255,0.1)"
+          "fill-outline-color": "rgba(255,255,255,0.1)",
         },
       });
 
@@ -102,8 +114,10 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   // Update Grid Data Source when `data` prop changes
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
-    
-    const source = mapRef.current.getSource("sar-grid") as mapboxgl.GeoJSONSource;
+
+    const source = mapRef.current.getSource(
+      "sar-grid"
+    ) as mapboxgl.GeoJSONSource;
     if (source && data) {
       source.setData(data);
     }
@@ -113,7 +127,9 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
 
-    const source = mapRef.current.getSource("selection-point") as mapboxgl.GeoJSONSource;
+    const source = mapRef.current.getSource(
+      "selection-point"
+    ) as mapboxgl.GeoJSONSource;
     if (source) {
       if (selectedPoint) {
         source.setData({
@@ -144,7 +160,7 @@ export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatma
     mapRef.current.flyTo({
       center: center,
       zoom: 12,
-      essential: true
+      essential: true,
     });
   }, [center]);
 
