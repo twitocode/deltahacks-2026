@@ -68,7 +68,7 @@ function HomePage() {
           {/* Hero Section */}
           <main className="flex-1 flex flex-col items-center justify-center text-center mt-[-80px]">
             <div className="relative">
-              <h1 className="text-5xl md:text-7xl font-['Playfair_Display'] leading-tight animate-fade-in-up">
+              <h1 className="text-5xl md:text-7xl font-['Playfair_Display'] leading-tight tracking-tight animate-fade-in-up">
                 Making Search and Rescue
               </h1>
 
@@ -402,7 +402,7 @@ function HomePage() {
           </h2>
 
           <button
-            className="mt-4 bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-200 hover:scale-105 transition-all duration-300 ease-in-out cursor-pointer"
+            className="mt-4 bg-white text-gray-900 px-8 py-3 rounded-full font-medium text-sm hover:bg-gray-200 hover:scale-110 transition-all duration-300 ease-in-out shadow-lg cursor-pointer"
             onClick={() => navigate("/map")}
           >
             Let's Demo
