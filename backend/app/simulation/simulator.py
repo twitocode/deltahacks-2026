@@ -40,7 +40,8 @@ class Agent:
     lon: float
     elevation: float
     strategy: Strategy
-    start_time: datetime
+    heading: float  # Direction in radians (0 = North, clockwise)
+    steps_taken: int = 0
     energy: float = 1.0  # 0-1, decreases over time
     is_active: bool = True
 
@@ -136,7 +137,10 @@ class SARSimulator:
         
         # Calculate simulation duration
         if time_last_seen and current_time:
-            elapsed = current_time - time_last_seen
+            # Strip timezone info for comparison (make both naive)
+            tls = time_last_seen.replace(tzinfo=None) if time_last_seen.tzinfo else time_last_seen
+            ct = current_time.replace(tzinfo=None) if current_time.tzinfo else current_time
+            elapsed = ct - tls
             elapsed_minutes = int(elapsed.total_seconds() / 60)
         else:
             elapsed_minutes = 0
@@ -233,12 +237,16 @@ class SARSimulator:
             else:
                 strategy = Strategy.STAYING_PUT
 
+            # Assign random heading (radians, 0=North)
+            heading = random.uniform(0, 2 * math.pi)
+
             agents.append(Agent(
                 lat=agent_lat,
                 lon=agent_lon,
                 elevation=elevation,
                 strategy=strategy,
-                start_time=datetime.now(), # Placeholder, updated in run
+                heading=heading,
+                steps_taken=0,
                 energy=1.0,
                 is_active=True
             ))
@@ -274,54 +282,63 @@ class SARSimulator:
     ) -> None:
         """Move a single agent based on terrain, features, and profile."""
         
-        # Check stop probability based on elapsed time (ISRID data)
-        # 25% stop > 1 hr, 50% > 5 hr, 95% > 24 hr
-        # We model this as a small probability to stop at each step if over threshold
-        # to achieve the cumulative target.
-        # Simplified: If agent is active and time logic applies.
-        # But we don't have exact elapsed time per agent in step function without passing it.
-        # We can assume uniform time steps.
+        # Increment step counter
+        agent.steps_taken += 1
         
-        # Calculate slope in direction of travel (for Tobler's) - approximated by max slope around
-        # We need slope for speed calculation.
+        # Time-based stop probability (ISRID data)
+        # 25% stop > 1hr (4 steps), 50% > 5hr (20 steps), 95% > 24hr (96 steps)
+        # We model this as a per-step probability to achieve cumulative target
+        if agent.steps_taken > 4:
+            # Calculate stop probability per step to reach target
+            if agent.steps_taken > 96:
+                stop_prob = 0.15  # High chance each step
+            elif agent.steps_taken > 20:
+                stop_prob = 0.05  # Medium chance
+            else:
+                stop_prob = 0.02  # Low chance
+            
+            if random.random() < stop_prob:
+                agent.is_active = False
+                return
         
-        # Effective speed calculation
-        # 1. Base speed from profile (Age/Gender)
-        profile_speed = profile.speed_factor
-        
-        # 2. Weather penalty
-        weather_penalty = weather.movement_penalty
-        
-        # 3. Strategy Modifier
+        # Strategy: Staying Put
         if agent.strategy == Strategy.STAYING_PUT:
-            # 99% chance to not move
             if random.random() < 0.99:
                 return
-            profile_speed *= 0.1
         
-        # Calculate potential moves and choose one
-        weights = self._calculate_direction_weights(
-            agent, sampler, features, profile, terrain
-        )
+        # Effective speed calculation
+        profile_speed = profile.speed_factor
+        weather_penalty = weather.movement_penalty
         
-        total_weight = sum(weights)
-        if total_weight < 0.001:
-            agent.is_active = False
-            return
-            
-        normalized = [w / total_weight for w in weights]
-        direction_idx = random.choices(range(8), weights=normalized)[0]
-        dx, dy = self.DIRECTIONS[direction_idx]
-        
-        # Add randomness based on profile & Strategy
-        randomness = profile.direction_randomness
+        # Direction selection based on strategy
         if agent.strategy == Strategy.DIRECTION_TRAVELING:
-             randomness *= 0.5 # More directional
-        elif agent.strategy == Strategy.RANDOM_WALKING:
-             randomness = 1.0 # Fully random
-             
-        dx += random.gauss(0, randomness * 0.3)
-        dy += random.gauss(0, randomness * 0.3)
+            # Use persistent heading with small variance
+            heading_variance = 0.15  # ~8 degrees
+            actual_heading = agent.heading + random.gauss(0, heading_variance)
+            dx = math.sin(actual_heading)
+            dy = math.cos(actual_heading)
+        else:
+            # Other strategies use weighted random direction
+            weights = self._calculate_direction_weights(
+                agent, sampler, features, profile, terrain
+            )
+            
+            total_weight = sum(weights)
+            if total_weight < 0.001:
+                agent.is_active = False
+                return
+                
+            normalized = [w / total_weight for w in weights]
+            direction_idx = random.choices(range(8), weights=normalized)[0]
+            dx, dy = self.DIRECTIONS[direction_idx]
+            
+            # Add randomness based on profile & Strategy
+            randomness = profile.direction_randomness
+            if agent.strategy == Strategy.RANDOM_WALKING:
+                randomness = 1.0
+                 
+            dx += random.gauss(0, randomness * 0.3)
+            dy += random.gauss(0, randomness * 0.3)
         
         # Normalize direction
         mag = math.sqrt(dx**2 + dy**2)
@@ -499,7 +516,7 @@ class SARSimulator:
         
         # Apply Gaussian smoothing for visualization
         from scipy.ndimage import gaussian_filter
-        density = gaussian_filter(density, sigma=1.5)
+        density = gaussian_filter(density, sigma=0.8)
         
         # Convert to list of points
         west, south, east, north = terrain.bounds
@@ -567,7 +584,7 @@ class SARSimulator:
         density /= active_count
         
         # Apply Gaussian smoothing
-        density = gaussian_filter(density, sigma=1.5)
+        density = gaussian_filter(density, sigma=0.8)
         
         # Normalize to 0-1 range
         max_val = density.max()
