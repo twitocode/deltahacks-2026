@@ -275,10 +275,7 @@ def step_single_agent_pure(
     profile: HikerProfile,
     weather: WeatherConditions,
     terrain: TerrainModel,
-    timestep_seconds: int = 900,
-    center_lat: float = 0.0,
-    center_lon: float = 0.0,
-    radius_km: float = 10.0
+    timestep_seconds: int = 900
 ) -> Tuple[Agent, List[Dict[str, Any]]]:
     """
     Move a single agent based on terrain, features, and profile.
@@ -401,24 +398,11 @@ def step_single_agent_pure(
     new_lat = agent.lat + dy * distance_lat
     new_lon = agent.lon + dx * distance_lon
     
-    # Check bounds (terrain bounds)
+    # Check bounds
     west, south, east, north = terrain.bounds
     if not (south <= new_lat <= north and west <= new_lon <= east):
         agent.is_active = False
         logs.append({"type": "stop", "reason": "Left simulation bounds"})
-        return agent, logs
-    
-    # Check distance from center (search radius)
-    # Using Haversine formula approximation
-    dlat = math.radians(new_lat - center_lat)
-    dlon = math.radians(new_lon - center_lon)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(center_lat)) * math.cos(math.radians(new_lat)) * math.sin(dlon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    distance_from_center_km = 6371.0 * c  # Earth radius in km
-    
-    if distance_from_center_km > radius_km:
-        agent.is_active = False
-        logs.append({"type": "stop", "reason": f"Exceeded search radius ({distance_from_center_km:.2f}km > {radius_km}km)"})
         return agent, logs
     
     # Update agent position
@@ -576,8 +560,7 @@ class SARSimulator:
                 
                 # Update agent positions
                 agents = await self._step_agents(
-                    agents, sampler, feature_masks, profile, weather, terrain, tracker,
-                    center_lat, center_lon, radius_km
+                    agents, sampler, feature_masks, profile, weather, terrain, tracker
                 )
                 
                 # Update tracker's reference to agents list since we might have replaced it
@@ -675,10 +658,7 @@ class SARSimulator:
         profile: HikerProfile,
         weather: WeatherConditions,
         terrain: TerrainModel,
-        tracker: AgentTracker,
-        center_lat: float,
-        center_lon: float,
-        radius_km: float
+        tracker: AgentTracker
     ) -> List[Agent]:
         """
         Advance all agents by one timestep.
@@ -715,8 +695,7 @@ class SARSimulator:
         # 2. Run tracked agent locally (synchronously) to handle logging
         if tracked_agent:
             updated_one, logs = step_single_agent_pure(
-                tracked_agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS,
-                center_lat, center_lon, radius_km
+                tracked_agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
             )
             updated_agents.append(updated_one)
             
@@ -749,8 +728,7 @@ class SARSimulator:
                     futures = [
                         executor.submit(
                             step_single_agent_pure,
-                            agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS,
-                            center_lat, center_lon, radius_km
+                            agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
                         ) 
                         for agent in other_agents
                     ]
@@ -769,8 +747,7 @@ class SARSimulator:
                 # Serial Execution
                 for agent in other_agents:
                     updated_agent, _ = step_single_agent_pure(
-                        agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS,
-                        center_lat, center_lon, radius_km
+                        agent, sampler, features, profile, weather, terrain, self.TIMESTEP_SECONDS
                     )
                     updated_agents.append(updated_agent)
         
