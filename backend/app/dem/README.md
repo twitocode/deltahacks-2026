@@ -1,70 +1,68 @@
 # DEM Loader Module
 
-Automatic DEM (Digital Elevation Model) tile loading with caching support.
-
-## Overview
-
-The `MeritDEMLoader` automatically downloads elevation data from NASA SRTM when needed and caches tiles locally for fast subsequent lookups.
+Single-tile DEM loading with in-memory caching.
 
 ## Features
 
-- **Auto-Download**: Fetches missing 1x1 degree tiles from NASA SRTM COG on first request
-- **Local Caching**: Saves tiles to `data/elevation/merit/` for instant future access
-- **Memory Safe**: Max 9 tiles (3x3 grid) per request, ~5km radius limit
-- **HTTP Range Requests**: Only downloads needed portions from remote COG
+- **Single-Tile Constraint**: All searches must fit within one 1x1° tile
+- **LRU Memory Cache**: O(1) lookups for cached tiles (max 4 tiles)
+- **Auto-Download**: Fetches from NASA SRTM COG on first request
+- **Session Cleanup**: Optional auto-delete of tiles on server shutdown
 
 ## Quick Start
 
 ```python
 from app.dem.dem_loader import get_dem_loader
 
-# Get singleton loader instance
-loader = get_dem_loader()
+loader = get_dem_loader(cleanup_on_exit=False)  # Keep tiles for dev
 
-# Get elevation at a point (auto-downloads if needed)
+# Get elevation at a point (O(1) after first load)
 elevation = loader.get_elevation_at_point(51.178, -115.570)
-print(f"Elevation: {elevation}m")
 
-# Get elevation grid for an area
-bounds = (-115.6, 51.1, -115.5, 51.2)  # (west, south, east, north)
-dem_data = loader.get_elevation_window(bounds)
-print(f"Grid shape: {dem_data.elevation.shape}")
+# Load search area (validates single-tile constraint)
+dem_data = loader.get_elevation_for_search(
+    center_lat=51.178,
+    center_lon=-115.570,
+    radius_km=5.0
+)
 ```
 
-## API Reference
+## Developer Testing
 
-### `get_dem_loader() -> MeritDEMLoader`
-Returns the singleton loader instance.
+```bash
+cd backend
 
-### `MeritDEMLoader`
+# Download tile for Banff
+python scripts/test_dem.py --lat 51.178 --lon -115.570 --info
 
-#### `get_elevation_at_point(lat, lon) -> Optional[float]`
-Get elevation at a single coordinate. Returns `None` if unavailable.
+# Test 5km search area
+python scripts/test_dem.py --lat 51.178 --lon -115.570 --radius 5
 
-#### `get_elevation_window(bounds) -> DEMData`
-Get elevation grid for a bounding box.
-- `bounds`: Tuple of (west, south, east, north) in degrees
-- Returns `DEMData` with `.elevation` (numpy array) and `.metadata`
+# Get elevation
+python scripts/test_dem.py --lat 51.178 --lon -115.570 --elevation
 
-#### `list_cached_tiles() -> List[str]`
-List all locally cached tile filenames.
+# List cached tiles
+python scripts/test_dem.py --list
 
-#### `clear_cache()`
-Delete all cached tiles.
-
-## Configuration
-
-Set in `app/config.py` or `.env`:
-
-```env
-DEM_DATA_DIR=../data/elevation/merit  # Tile cache directory
+# Clear cache
+python scripts/test_dem.py --clear
 ```
 
-## Tile Naming
+## Single-Tile Constraint
 
-Tiles are named `merit_{lat}_{lon}.tif` where lat/lon are integer floor values.
+Each tile covers 1°×1° (~70km × 111km at 50°N). Max safe radius = ~35km.
 
-Example: Point (51.178, -115.570) uses tile `merit_51_-116.tif`
+If search spans multiple tiles, you'll get an error with max safe radius:
+```
+ValueError: Search radius 40km spans multiple tiles. Max radius for this location: 32.5km
+```
+
+## Cache Stats
+
+```python
+loader.get_cache_stats()
+# {'memory_cache_size': 2, 'memory_cache_max': 4, 'disk_tiles': 6, ...}
+```
 
 ## Data Source
 
