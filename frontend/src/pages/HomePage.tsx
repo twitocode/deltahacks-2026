@@ -102,11 +102,10 @@ function HomePage() {
       {/* Features Section */}
       <section
         ref={featuresAnim.ref}
-        className={`relative z-10 w-full min-h-[600px] bg-black flex items-center py-20 border-t border-gray-900 transition-opacity duration-1000 ${
-          featuresAnim.isVisible
-            ? "opacity-100 animate-fade-in-up"
-            : "opacity-0"
-        }`}
+        className={`relative z-10 w-full min-h-[600px] bg-black flex items-center py-20 border-t border-gray-900 transition-opacity duration-1000 ${featuresAnim.isVisible
+          ? "opacity-100 animate-fade-in-up"
+          : "opacity-0"
+          }`}
       >
         <div className="container mx-auto px-8 md:px-16 flex flex-col gap-12">
           {/* Top Label */}
@@ -130,15 +129,15 @@ function HomePage() {
             <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card
                 title="High Incident Rate"
-                description="100+ SAR incidents annually in Banff alone"
+                description="Canada’s SAR teams respond to more than 15,000 calls a year."
                 icon={
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
-                    strokeWidth={1.5}
+                    strokeWidth={2}
                     stroke="currentColor"
-                    className="w-5 h-5"
+                    className="w-10 h-10 text-[#ff4d4d]"
                   >
                     <path
                       strokeLinecap="round"
@@ -150,15 +149,15 @@ function HomePage() {
               />
               <Card
                 title="Search Radius"
-                description="75% of lost hikers found within 5km - but which 5km?"
+                description="75% of hikers are found within 5km. We'll tell you where."
                 icon={
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
-                    strokeWidth={1.5}
+                    strokeWidth={2}
                     stroke="currentColor"
-                    className="w-5 h-5"
+                    className="w-10 h-10 text-[#ff4d4d]"
                   >
                     <path
                       strokeLinecap="round"
@@ -175,15 +174,15 @@ function HomePage() {
               />
               <Card
                 title="Time Critical"
-                description="Average search time: 8-12 hours"
+                description="Average search time: 8-12 hours."
                 icon={
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
-                    strokeWidth={1.5}
+                    strokeWidth={2}
                     stroke="currentColor"
-                    className="w-5 h-5"
+                    className="w-10 h-10 text-[#ff4d4d]"
                   >
                     <path
                       strokeLinecap="round"
@@ -201,9 +200,8 @@ function HomePage() {
       {/* Agent Canvas Section */}
       <section
         ref={canvasAnim.ref}
-        className={`relative z-10 container mx-auto bg-black border border-gray-800 rounded-3xl overflow-hidden py-16 mt-[-40px] transition-opacity duration-1000 ${
-          canvasAnim.isVisible ? "opacity-100 animate-fade-in-up" : "opacity-0"
-        }`}
+        className={`relative z-10 container mx-auto bg-black border border-gray-800 rounded-3xl overflow-hidden py-16 mt-[-40px] transition-opacity duration-1000 ${canvasAnim.isVisible ? "opacity-100 animate-fade-in-up" : "opacity-0"
+          }`}
       >
         <div className="px-8 md:px-16 flex flex-col lg:flex-row gap-20 items-start">
           {/* Left Side: Content & Menu */}
@@ -292,18 +290,18 @@ function HomePage() {
             {/* Card 1 */}
             <div className="flex flex-col p-8 bg-[#111] rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors duration-300">
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
-                2024 • Journal of SAR
+                2014 • ScienceDirect
               </span>
               <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
-                Search Theory Verification
+                An analysis of probability of area techniques for missing persons in Yosemite National Park
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
-                "Beacon AI's predictive modeling increases probability of
-                detection by 40% compared to traditional grid searches in alpine
-                environments."
+                <b>42%</b> of lost hikers are found directly on a linear feature (trail, road, or stream). For those not on a trail, the median distance from a linear feature is only <b>58 meters</b>.
               </p>
               <a
-                href="#"
+                href="https://pubmed.ncbi.nlm.nih.gov/36254507/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-2 text-[#ff4d4d] text-sm font-medium hover:text-[#ff6b6b] transition-colors"
               >
                 Read Publication
@@ -327,18 +325,17 @@ function HomePage() {
             {/* Card 2 */}
             <div className="flex flex-col p-8 bg-[#111] rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors duration-300">
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
-                2025 • AI & Rescue
+                2022 • Scientific Reports
               </span>
               <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
-                Predictive Modeling in Wilderness
+                An agent-based model reveals lost person behavior based on data from wilderness search and rescue
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
-                "Applying machine learning to historical lost person behavior
-                data significantly reduces the initial bounding box for search
-                operations."
+                Specifically, the weighted average behavioral profile offers a very good fit to more than half of the incidents and it performs better than most behavioral profiles for almost all incidents.
               </p>
               <a
-                href="#"
+                href="https://www.nature.com/articles/s41598-022-09502-4"
+                target="_blank"
                 className="flex items-center gap-2 text-[#ff4d4d] text-sm font-medium hover:text-[#ff6b6b] transition-colors"
               >
                 Read Publication
@@ -362,18 +359,17 @@ function HomePage() {
             {/* Card 3 */}
             <div className="flex flex-col p-8 bg-[#111] rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors duration-300">
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
-                2023 • Intl. SAR Council
+                The Bravo Zulu
               </span>
               <h3 className="text-2xl font-['Open_Sans'] text-white mb-4">
-                Bayesian Optimization for SAR
+                Dr. Robert Koester's Lost Person Behavior and How to Contribute to ISRID
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
-                "Utilizing Bayesian inference to update probability maps in
-                real-time allows for dynamic resource allocation during complex
-                missions."
+                Historically people were prone to going downhill, however with the use of cell phones the trend has changed that people are brought uphill for signal.
               </p>
               <a
-                href="#"
+                href="https://www.d4h.com/blog/dr-robert-koesters-lost-person-behavior-and-how-to-contribute-to-isrid"
+                target="_blank"
                 className="flex items-center gap-2 text-[#ff4d4d] text-sm font-medium hover:text-[#ff6b6b] transition-colors"
               >
                 Read Publication
