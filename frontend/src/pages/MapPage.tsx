@@ -96,6 +96,7 @@ function MapPage() {
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
+  const [showPlayWarning, setShowPlayWarning] = useState(false);
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -228,7 +229,8 @@ function MapPage() {
   const handlePlayPause = () => {
     if (!serverData) {
       console.warn("[MapPage] Play clicked but no data loaded.");
-      alert("Please click 'Find Person' first.");
+      setShowPlayWarning(true);
+      setTimeout(() => setShowPlayWarning(false), 3000);
       return;
     }
     if (timeOffset >= maxMinutes && !isPlaying) {
@@ -282,11 +284,10 @@ function MapPage() {
                 type="text"
                 value={formData.latitude}
                 onChange={(e) => handleInputChange("latitude", e.target.value)}
-                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
-                  showErrors && fieldErrors.latitude
-                    ? "border-red-500"
-                    : "border-gray-700 focus:border-gray-500"
-                }`}
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${showErrors && fieldErrors.latitude
+                  ? "border-red-500"
+                  : "border-gray-700 focus:border-gray-500"
+                  }`}
               />
             </div>
             <div>
@@ -297,11 +298,10 @@ function MapPage() {
                 type="text"
                 value={formData.longitude}
                 onChange={(e) => handleInputChange("longitude", e.target.value)}
-                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
-                  showErrors && fieldErrors.longitude
-                    ? "border-red-500"
-                    : "border-gray-700 focus:border-gray-500"
-                }`}
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${showErrors && fieldErrors.longitude
+                  ? "border-red-500"
+                  : "border-gray-700 focus:border-gray-500"
+                  }`}
               />
             </div>
           </div>
@@ -310,17 +310,63 @@ function MapPage() {
               <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
                 Age
               </label>
-              <input
-                type="number"
-                value={formData.age}
-                onChange={(e) => handleInputChange("age", e.target.value)}
-                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
-                  showErrors && fieldErrors.age
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.age}
+                  onChange={(e) => handleInputChange("age", e.target.value)}
+                  className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors pr-8 ${showErrors && fieldErrors.age
                     ? "border-red-500"
                     : "border-gray-700 focus:border-gray-500"
-                }`}
-                placeholder="e.g. 35"
-              />
+                    }`}
+                  placeholder="e.g. 35"
+                />
+                <div className="absolute right-0 top-0 h-full w-8 flex flex-col border-l border-gray-700">
+                  <button
+                    onClick={() => {
+                      const current = parseInt(formData.age) || 0;
+                      handleInputChange("age", (current + 1).toString());
+                    }}
+                    className="flex-1 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors rounded-tr-md"
+                    type="button"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-3 h-3"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const current = parseInt(formData.age) || 0;
+                      if (current > 0)
+                        handleInputChange("age", (current - 1).toString());
+                    }}
+                    className="flex-1 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors rounded-br-md border-t border-gray-700"
+                    type="button"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-3 h-3"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
             <div>
               <label className="flex items-center gap-1.5 text-xs text-gray-400 mb-1.5 font-jetbrains">
@@ -329,11 +375,10 @@ function MapPage() {
               <select
                 value={formData.sex}
                 onChange={(e) => handleInputChange("sex", e.target.value)}
-                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${
-                  showErrors && fieldErrors.sex
-                    ? "border-red-500"
-                    : "border-gray-700 focus:border-gray-500"
-                }`}
+                className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${showErrors && fieldErrors.sex
+                  ? "border-red-500"
+                  : "border-gray-700 focus:border-gray-500"
+                  }`}
               >
                 <option value="">Select...</option>
                 <option value="male">Male</option>
@@ -349,11 +394,10 @@ function MapPage() {
             <select
               value={formData.experience}
               onChange={(e) => handleInputChange("experience", e.target.value)}
-              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${
-                showErrors && fieldErrors.experience
-                  ? "border-red-500"
-                  : "border-gray-700 focus:border-gray-500"
-              }`}
+              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors appearance-none cursor-pointer ${showErrors && fieldErrors.experience
+                ? "border-red-500"
+                : "border-gray-700 focus:border-gray-500"
+                }`}
             >
               <option value="">Select level...</option>
               <option value="novice">Novice</option>
@@ -372,11 +416,10 @@ function MapPage() {
               onChange={(e) =>
                 handleInputChange("timeLastSeen", e.target.value)
               }
-              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${
-                showErrors && fieldErrors.timeLastSeen
-                  ? "border-red-500"
-                  : "border-gray-700 focus:border-gray-500"
-              }`}
+              className={`w-full bg-[#2a2a2a] border rounded-md px-3 py-2 text-white text-sm focus:outline-none transition-colors ${showErrors && fieldErrors.timeLastSeen
+                ? "border-red-500"
+                : "border-gray-700 focus:border-gray-500"
+                }`}
             />
           </div>
         </div>
@@ -549,43 +592,51 @@ function MapPage() {
                   />
                 </svg>
               </button>
-              <button
-                onClick={handlePlayPause}
-                className="p-3 bg-white text-black rounded-full hover:bg-gray-100 transition-colors"
-                title={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15.75 5.25v13.5m-7.5-13.5v13.5"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
-                    />
-                  </svg>
+              <div className="relative">
+                {showPlayWarning && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-red-500 text-white text-xs px-3 py-1.5 rounded-md shadow-lg whitespace-nowrap animate-fade-in-up z-50">
+                    Find a person first
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-500 rotate-45" />
+                  </div>
                 )}
-              </button>
+                <button
+                  onClick={handlePlayPause}
+                  className="p-3 bg-white text-black rounded-full hover:bg-gray-100 transition-colors"
+                  title={isPlaying ? "Pause" : "Play"}
+                >
+                  {isPlaying ? (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                      className="w-5 h-5"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.75 5.25v13.5m-7.5-13.5v13.5"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                      className="w-5 h-5"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
               <button
                 onClick={handleSkipToEnd}
                 className="p-2 text-gray-400 hover:text-white transition-colors"
