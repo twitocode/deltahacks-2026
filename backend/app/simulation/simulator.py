@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple
 from enum import Enum
 
 import numpy as np
+from tqdm import tqdm
 
 from app.config import get_settings
 from app.terrain.terrain_pipeline import TerrainModel, get_terrain_pipeline
@@ -163,7 +164,7 @@ class SARSimulator:
         # Run simulation
         time_slices = []
         
-        for step in range(num_steps):
+        for step in tqdm(range(num_steps), desc="Simulating", unit="step"):
             time_offset = step * self.settings.timestep_minutes
             
             # Update agent positions
