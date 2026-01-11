@@ -10,6 +10,7 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
+from enum import Enum
 
 import numpy as np
 
@@ -23,12 +24,23 @@ from app.simulation.weather import get_weather_service
 logger = logging.getLogger(__name__)
 
 
+class Strategy(str, Enum):
+    """Movement strategies from ISRID data."""
+    DIRECTION_TRAVELING = "DT"  # 55.9%
+    ROUTE_TRAVELING = "RT"      # 37.7%
+    RANDOM_WALKING = "RW"       # 5.5%
+    VIEW_ENHANCING = "VE"       # 0.6%
+    STAYING_PUT = "SP"          # 0.3%
+
+
 @dataclass
 class Agent:
     """A simulated agent representing possible person location."""
     lat: float
     lon: float
     elevation: float
+    strategy: Strategy
+    start_time: datetime
     energy: float = 1.0  # 0-1, decreases over time
     is_active: bool = True
 
@@ -207,10 +219,26 @@ class SARSimulator:
             
             elevation = sampler.elevation(agent_lat, agent_lon) or 0.0
             
+            # Assign strategy based on probabilities
+            # DT: 55.9%, RT: 37.7%, RW: 5.5%, VE: 0.6%, SP: 0.3%
+            r = random.random() * 100
+            if r < 55.9:
+                strategy = Strategy.DIRECTION_TRAVELING
+            elif r < 55.9 + 37.7:
+                strategy = Strategy.ROUTE_TRAVELING
+            elif r < 55.9 + 37.7 + 5.5:
+                strategy = Strategy.RANDOM_WALKING
+            elif r < 55.9 + 37.7 + 5.5 + 0.6:
+                strategy = Strategy.VIEW_ENHANCING
+            else:
+                strategy = Strategy.STAYING_PUT
+
             agents.append(Agent(
                 lat=agent_lat,
                 lon=agent_lon,
                 elevation=elevation,
+                strategy=strategy,
+                start_time=datetime.now(), # Placeholder, updated in run
                 energy=1.0,
                 is_active=True
             ))
@@ -245,79 +273,109 @@ class SARSimulator:
         terrain: TerrainModel
     ) -> None:
         """Move a single agent based on terrain, features, and profile."""
-        # Calculate effective speed
-        speed = self.BASE_SPEED_MPS * profile.speed_factor
-        speed *= (1.0 - weather.movement_penalty)
-        speed *= agent.energy
         
-        # Distance traveled in this timestep (meters)
-        distance_m = speed * self.TIMESTEP_SECONDS
+        # Check stop probability based on elapsed time (ISRID data)
+        # 25% stop > 1 hr, 50% > 5 hr, 95% > 24 hr
+        # We model this as a small probability to stop at each step if over threshold
+        # to achieve the cumulative target.
+        # Simplified: If agent is active and time logic applies.
+        # But we don't have exact elapsed time per agent in step function without passing it.
+        # We can assume uniform time steps.
         
-        # Convert to degrees (approximate)
-        distance_lat = distance_m / 111320.0
-        distance_lon = distance_m / (111320.0 * math.cos(math.radians(agent.lat)))
+        # Calculate slope in direction of travel (for Tobler's) - approximated by max slope around
+        # We need slope for speed calculation.
         
-        # Calculate direction weights
+        # Effective speed calculation
+        # 1. Base speed from profile (Age/Gender)
+        profile_speed = profile.speed_factor
+        
+        # 2. Weather penalty
+        weather_penalty = weather.movement_penalty
+        
+        # 3. Strategy Modifier
+        if agent.strategy == Strategy.STAYING_PUT:
+            # 99% chance to not move
+            if random.random() < 0.99:
+                return
+            profile_speed *= 0.1
+        
+        # Calculate potential moves and choose one
         weights = self._calculate_direction_weights(
             agent, sampler, features, profile, terrain
         )
         
-        # Choose direction probabilistically
         total_weight = sum(weights)
         if total_weight < 0.001:
-            # Agent is stuck
             agent.is_active = False
             return
-        
+            
         normalized = [w / total_weight for w in weights]
         direction_idx = random.choices(range(8), weights=normalized)[0]
         dx, dy = self.DIRECTIONS[direction_idx]
         
-        # Add randomness based on profile
+        # Add randomness based on profile & Strategy
         randomness = profile.direction_randomness
+        if agent.strategy == Strategy.DIRECTION_TRAVELING:
+             randomness *= 0.5 # More directional
+        elif agent.strategy == Strategy.RANDOM_WALKING:
+             randomness = 1.0 # Fully random
+             
         dx += random.gauss(0, randomness * 0.3)
         dy += random.gauss(0, randomness * 0.3)
         
-        # Normalize
+        # Normalize direction
         mag = math.sqrt(dx**2 + dy**2)
         if mag > 0:
             dx /= mag
             dy /= mag
+            
+        # Determine target LatLon
+        # Calculate speed with Tobler's Function
+        # We need slope in the chosen direction. To approximate, we sample a point ahead.
+        lookahead_dist = 20.0 # meters
+        lookahead_lat = agent.lat + dy * (lookahead_dist / 111320.0)
+        lookahead_lon = agent.lon + dx * (lookahead_dist / (111320.0 * math.cos(math.radians(agent.lat))))
         
-        # Move agent
+        slope = sampler.slope(agent.lat, agent.lon, lookahead_lat, lookahead_lon) or 0.0
+        
+        # Tobler's Hiking Function: W = 6 * exp(-3.5 * |dh/dx + 0.05|) km/h
+        # dh/dx is slope (tan theta)
+        tobler_speed_kmh = 6 * math.exp(-3.5 * abs(slope + 0.05))
+        tobler_speed_mps = tobler_speed_kmh / 3.6
+        
+        # Apply factors
+        final_speed = tobler_speed_mps * (profile_speed / 1.317) # Normalize profile to male base to scale Tobler
+        final_speed *= (1.0 - weather_penalty)
+        final_speed *= agent.energy
+        
+        distance_m = final_speed * self.TIMESTEP_SECONDS
+        
+        distance_lat = distance_m / 111320.0
+        distance_lon = distance_m / (111320.0 * math.cos(math.radians(agent.lat)))
+        
         new_lat = agent.lat + dy * distance_lat
         new_lon = agent.lon + dx * distance_lon
         
-        # Check bounds
+         # Check bounds
         west, south, east, north = terrain.bounds
         if not (south <= new_lat <= north and west <= new_lon <= east):
             agent.is_active = False
             return
         
-        # Check terrain passability
+        # Update agent position
         new_elevation = sampler.elevation(new_lat, new_lon)
         if new_elevation is None:
-            agent.is_active = False
-            return
-        
-        # Check for impassable terrain (very steep or cliffs)
-        slope = sampler.slope(agent.lat, agent.lon, new_lat, new_lon)
-        if slope is not None and abs(slope) > 0.7:  # > 35 degrees
-            # 50% chance to not move if very steep
-            if random.random() < 0.5:
-                return
-        
-        # Update agent position
+             agent.is_active = False
+             return
+
         agent.lat = new_lat
         agent.lon = new_lon
         agent.elevation = new_elevation
         
-        # Decrease energy over time
-        energy_loss = 0.01  # Base loss per step
-        if new_elevation > agent.elevation:  # Going uphill
-            energy_loss += 0.01
-        if weather.temperature_c < 0 or weather.temperature_c > 30:
-            energy_loss += 0.005
+        # Energy and Fatigue (Simple model)
+        energy_loss = 0.005 # Base metabolic cost
+        if slope > 0:
+             energy_loss += slope * 0.05 # Uphill cost
         
         agent.energy = max(0.1, agent.energy - energy_loss)
     
@@ -340,46 +398,47 @@ class SARSimulator:
         for dx, dy in self.DIRECTIONS:
             weight = 1.0
             
-            # Small movement for direction checking
-            check_lat = agent.lat + dy * 0.0005
+            # Lookahead for features
+            check_lat = agent.lat + dy * 0.0005 # ~50m
             check_lon = agent.lon + dx * 0.0005
             
-            # Terrain slope influence
+            # 1. Slope / Signal Seeking (Uphill bias)
+            # Historically downhill, BUT new data says uphill for signal
             slope = sampler.slope(agent.lat, agent.lon, check_lat, check_lon)
             if slope is not None:
-                if slope > 0.3:  # Steep uphill
-                    weight *= 0.3 if profile.skill_level < 3 else 0.5
-                elif slope > 0.1:  # Moderate uphill
-                    weight *= 0.6
-                elif slope < -0.1:  # Downhill - generally preferred
-                    weight *= 1.2
+                if slope > 0: # Uphill
+                     if agent.strategy == Strategy.VIEW_ENHANCING:
+                         weight *= 3.0 # Strong pull uphill
+                     else:
+                         weight *= 1.2 # General bias for signal
+                else: # Downhill
+                     weight *= 0.8 # Reduced bias
             
-            # Trail preference
+            # 2. Linear Features (Trails/Roads)
             check_row, check_col = self._latlon_to_index(
                 check_lat, check_lon, terrain
             )
+            
             if self._is_valid_index(check_row, check_col, features.shape):
-                # Strong preference for trails
-                if features.trails[check_row, check_col]:
-                    weight *= 2.0 * profile.trail_preference + 1.0
+                # Trail Attraction
+                # If doing Route Traveling, very strong pull
+                is_on_trail = features.trails[check_row, check_col]
+                is_on_road = features.roads[check_row, check_col]
                 
-                # Prefer roads when lost
-                if features.roads[check_row, check_col]:
-                    weight *= 1.5
+                if is_on_trail or is_on_road:
+                    if agent.strategy == Strategy.ROUTE_TRAVELING:
+                         weight *= 5.0 
+                    else:
+                         weight *= 2.0 # General attraction (58m rule)
                 
-                # Avoid water
+                # Water Avoidance (unless thirsty? assume avoidance for safety)
                 if features.rivers[check_row, check_col]:
                     weight *= 0.1
                 
-                # Avoid cliffs
+                 # Cliff Avoidance
                 if features.cliffs[check_row, check_col]:
-                    weight *= 0.05
-            
-            # Low energy agents prefer staying put or downhill
-            if agent.energy < 0.3:
-                if slope is not None and slope > 0:
-                    weight *= 0.2  # Very unlikely to go uphill when exhausted
-            
+                    weight *= 0.01
+
             weights.append(max(0.01, weight))
         
         return weights

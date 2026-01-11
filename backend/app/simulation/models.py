@@ -81,22 +81,32 @@ class HikerProfile(BaseModel):
     
     @property
     def speed_factor(self) -> float:
-        """Base speed modifier based on profile."""
-        factor = 1.0
+        """
+        Base speed modifier based on profile data (M/s).
+        Reference: https://www.healthline.com/health/exercise-fitness/average-walking-speed
+        """
+        # Base speeds (m/s)
+        base_speed = 1.317  # Male default
         
-        # Age factor
+        if self.gender == Gender.FEMALE:
+            base_speed = 1.241
+        
+        # Aging Decay: -0.012 m/s per decade
+        # Assuming base measure is around age 25
         if self.age:
-            if self.age < 18:
-                factor *= 0.8
-            elif self.age > 60:
-                factor *= 0.7
-            elif self.age > 70:
-                factor *= 0.5
+            decades = max(0, (self.age - 25) / 10.0)
+            decay = decades * 0.012
+            base_speed = max(0.5, base_speed - decay)
         
-        # Skill factor
-        factor *= 0.6 + (self.skill_level * 0.1)
+        # Skill factor adjustment (multiplier on top of physical base)
+        # Experienced hikers maintain pace better
+        skill_multiplier = 0.8 + (self.skill_level * 0.1)  # 0.9 to 1.3x
         
-        return factor
+        # Convert absolute m/s to a factor relative to specific simulator BASE_SPEED
+        # Note: Simulator likely has its own BASE_SPEED_MPS constant. 
+        # This factor multiplies THAT constant.
+        # If Simulator BASE_SPEED is 1.0, this returns absolute m/s.
+        return base_speed * skill_multiplier
     
     @property
     def direction_randomness(self) -> float:
@@ -136,8 +146,9 @@ class WeatherConditions(BaseModel):
             penalty += 0.2
         
         # Precipitation penalty
+        # Rain/snow: Reduces speed by 8.0% compared to dry ground.
         if self.precipitation_mm > 0:
-            penalty += min(0.3, self.precipitation_mm * 0.05)
+            penalty += 0.08
         
         # Wind penalty
         if self.wind_speed_ms > 10:
