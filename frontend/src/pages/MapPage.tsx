@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPrediction } from "../api";
 import MapboxHeatmap from "../components/Heatmap";
 import Logo from "../components/Logo";
+import LoadingAnimation from "../components/LoadingAnimation";
 import {
   convertServerGridToGeoJSON,
   type ServerGridResponse,
@@ -474,15 +475,19 @@ function MapPage() {
           {/* Online Status */}
           <div className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
             <div
-              className={`w-3 h-3 rounded-full ${
-                isOnline ? "bg-green-500" : "bg-red-500"
-              } animate-pulse`}
+              className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"
+                } animate-pulse`}
             />
             <span className="text-white text-sm font-medium">
               {isOnline ? "Online" : "Offline"}
             </span>
           </div>
         </div>
+
+
+        {/* Loading Overlay */}
+        <LoadingAnimation isLoading={isPending} />
+
         <div className="w-full h-full">
           <MapboxHeatmap
             data={heatmapGeoJson}
@@ -491,11 +496,11 @@ function MapPage() {
             isDarkMode={isDarkMode}
             selectedPoint={
               !isNaN(parseFloat(formData.latitude)) &&
-              !isNaN(parseFloat(formData.longitude))
+                !isNaN(parseFloat(formData.longitude))
                 ? [
-                    parseFloat(formData.longitude),
-                    parseFloat(formData.latitude),
-                  ]
+                  parseFloat(formData.longitude),
+                  parseFloat(formData.latitude),
+                ]
                 : null
             }
             onMapClick={(lat, lng) => {
@@ -514,11 +519,10 @@ function MapPage() {
                 <button
                   key={speed}
                   onClick={() => handleSpeedChange(speed)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    playbackSpeed === speed
-                      ? "bg-white text-black"
-                      : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
-                  }`}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${playbackSpeed === speed
+                    ? "bg-white text-black"
+                    : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
+                    }`}
                 >
                   {speed}x
                 </button>
@@ -616,9 +620,8 @@ function MapPage() {
                   (_, i) => (
                     <div key={i} className="flex flex-col items-center">
                       <div
-                        className={`w-0.5 ${
-                          i % 3 === 0 ? "h-4" : "h-2"
-                        } bg-gray-500`}
+                        className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"
+                          } bg-gray-500`}
                       />
                     </div>
                   )
@@ -657,7 +660,7 @@ function MapPage() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 
