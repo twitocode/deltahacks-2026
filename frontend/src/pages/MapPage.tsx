@@ -63,6 +63,23 @@ function MapPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Update map center when lat/lng input fields change
+  useEffect(() => {
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+
+    if (
+      !isNaN(lat) &&
+      !isNaN(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180
+    ) {
+      setMapCenter([lng, lat]);
+    }
+  }, [formData.latitude, formData.longitude]);
+
   // Mutation for fetching prediction (Simulates API or Fake Data)
   const { mutate: getPrediction, isPending } = useMutation({
     mutationFn: fetchPrediction,
@@ -317,8 +334,9 @@ function MapPage() {
       <div className="flex-1 relative">
         <div className="absolute top-4 right-4 z-50 bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
           <div
-            className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"
-              } animate-pulse`}
+            className={`w-3 h-3 rounded-full ${
+              isOnline ? "bg-green-500" : "bg-red-500"
+            } animate-pulse`}
           />
           <span className="text-white text-sm font-medium">
             {isOnline ? "Online" : "Offline"}
@@ -328,6 +346,15 @@ function MapPage() {
           <MapboxHeatmap
             data={heatmapGeoJson}
             center={mapCenter}
+            selectedPoint={
+              !isNaN(parseFloat(formData.latitude)) &&
+              !isNaN(parseFloat(formData.longitude))
+                ? [
+                    parseFloat(formData.longitude),
+                    parseFloat(formData.latitude),
+                  ]
+                : null
+            }
             onMapClick={(lat, lng) => {
               setFormData((prev) => ({
                 ...prev,
@@ -344,10 +371,11 @@ function MapPage() {
                 <button
                   key={speed}
                   onClick={() => handleSpeedChange(speed)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${playbackSpeed === speed
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    playbackSpeed === speed
                       ? "bg-white text-black"
                       : "bg-[#2a2a2a] text-gray-400 hover:bg-gray-700"
-                    }`}
+                  }`}
                 >
                   {speed}x
                 </button>
@@ -445,8 +473,9 @@ function MapPage() {
                   (_, i) => (
                     <div key={i} className="flex flex-col items-center">
                       <div
-                        className={`w-0.5 ${i % 3 === 0 ? "h-4" : "h-2"
-                          } bg-gray-500`}
+                        className={`w-0.5 ${
+                          i % 3 === 0 ? "h-4" : "h-2"
+                        } bg-gray-500`}
                       />
                     </div>
                   )

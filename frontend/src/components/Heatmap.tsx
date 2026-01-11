@@ -1,23 +1,22 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 interface MapboxHeatmapProps {
   data?: GeoJSON.FeatureCollection;
   onMapClick?: (lat: number, lng: number) => void;
   center?: [number, number];
+  selectedPoint?: [number, number] | null;
 }
 
 export default function MapboxHeatmap({
   data,
   onMapClick,
   center,
+  selectedPoint,
 }: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(
-    null
-  );
 
   useEffect(() => {
     // @ts-ignore
@@ -111,7 +110,7 @@ export default function MapboxHeatmap({
           6
         )}, Lng: ${lng.toFixed(6)}`
       );
-      setSelectedPoint([lng, lat]);
+      // Parent component handles the point state via onMapClick
       if (onMapClick) onMapClick(lat, lng);
     });
 
