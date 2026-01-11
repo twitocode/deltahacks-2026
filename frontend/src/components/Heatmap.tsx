@@ -1,189 +1,152 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-// Interface for our SAR data properties
-interface SARProperties {
-  id: string;
-  probability: number; // 0 to 1
-  timestamp: number;
-}
-
-// Generate fake data around Hamilton, Ontario
-const generateFakeSARData = (): GeoJSON.FeatureCollection => {
-  const center = [-79.8711, 43.2557]; // Hamilton, ON
-  const features: GeoJSON.Feature[] = [];
-
-  for (let i = 0; i < 10000; i++) {
-    // Random scatter around Hamilton (~10km radius approx)
-    const lng = center[0] + (Math.random() - 0.5) * 0.1;
-    const lat = center[1] + (Math.random() - 0.5) * 0.1;
-    
-    // Weighted probability: closer to center = higher probability
-    const dist = Math.sqrt(Math.pow(lng - center[0], 2) + Math.pow(lat - center[1], 2));
-    const rawProb = Math.max(0, 1 - (dist / 0.05)); // Normalize roughly
-    // Add some randomness to probability
-    const probability = Math.min(1, Math.max(0, rawProb * (0.8 + Math.random() * 0.4)));
-
-    features.push({
-      type: "Feature",
-      properties: {
-        id: `pt-${i}`,
-        probability: probability,
-        timestamp: Date.now(),
-      },
-      geometry: {
-        type: "Point",
-        coordinates: [lng, lat],
-      },
-    });
-  }
-
-  return {
-    type: "FeatureCollection",
-    features: features,
-  };
-};
-
 interface MapboxHeatmapProps {
   data?: GeoJSON.FeatureCollection;
+  onMapClick?: (lat: number, lng: number) => void;
+  center?: [number, number]; // Optional center to fly to
 }
 
-export default function MapboxHeatmap({ data }: MapboxHeatmapProps) {
+export default function MapboxHeatmap({ data, onMapClick, center }: MapboxHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-
-  // Use provided data or fallback to fake data
-  const geoJsonData = data || generateFakeSARData();
+  const [selectedPoint, setSelectedPoint] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY;
 
     if (!mapContainerRef.current) return;
 
+    // Default center if none provided (e.g. initial load)
+    const initialCenter = center || [-120.6848, 48.3562];
+
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: "mapbox://styles/mapbox/standard",
-      center: [-79.8711, 43.2557], // Hamilton
+      center: initialCenter,
       zoom: 12,
-      pitch: 60, // Pitch for 3D view
-      bearing: -20,
+      pitch: 45,
+      bearing: 0,
     });
 
     mapRef.current = map;
 
     map.on("load", () => {
-      map.addSource("sar-data", {
+      // Add empty source initially if no data
+      map.addSource("sar-grid", {
         type: "geojson",
-        data: geoJsonData as any, // Cast to avoid strict GeoJSON type mismatches with Mapbox
+        data: data || { type: "FeatureCollection", features: [] },
       });
 
+      // FILL LAYER for Grid Heatmap
       map.addLayer({
-        id: "sar-heatmap",
-        type: "heatmap",
-        source: "sar-data",
-        maxzoom: 15,
-        slot: "top", // 3D slot
+        id: "sar-grid-fill",
+        type: "fill",
+        source: "sar-grid",
+        slot: "top",
         paint: {
-          // Increase the heatmap weight based on probability
-          "heatmap-weight": [
+          "fill-color": [
             "interpolate",
             ["linear"],
             ["get", "probability"],
-            0,
-            0,
-            1,
-            1,
+            0.15, "rgba(33,102,172,0)",   // Transparent at low prob
+            0.3, "rgb(103,169,207)",      // Blue
+            0.5, "rgb(209,229,240)",      // Light Blue
+            0.7, "rgb(253,219,199)",      // Light Orange
+            0.85, "rgb(239,138,98)",      // Orange
+            1.0, "rgb(178,24,43)"         // Red
           ],
-          // Increase the heatmap color weight weight by zoom level
-          // heatmap-intensity is a multiplier on top of heatmap-weight
-          "heatmap-intensity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            11,
-            1,
-            15,
-            3,
-          ],
-          // Color ramp for heatmap.
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(33,102,172,0)",
-            0.2,
-            "rgb(103,169,207)",
-            0.4,
-            "rgb(209,229,240)",
-            0.6,
-            "rgb(253,219,199)",
-            0.8,
-            "rgb(239,138,98)",
-            1,
-            "rgb(178,24,43)",
-          ],
-          // Adjust the heatmap radius by zoom level
-          "heatmap-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            11,
-            15, // Radius at zoom 11
-            15,
-            30, // Radius at zoom 15
-          ],
-          // Transition from heatmap to circle layer by zoom level
-          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 14, 1, 15, 0],
+          "fill-opacity": 0.7,
+          "fill-outline-color": "rgba(255,255,255,0.1)"
+        },
+      });
+
+      // Add source and layer for selection marker
+      map.addSource("selection-point", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
         },
       });
 
       map.addLayer({
-        id: "sar-point",
+        id: "selection-point-layer",
         type: "circle",
-        source: "sar-data",
-        minzoom: 14,
-        slot: "top", // 3D slot
+        source: "selection-point",
+        slot: "top",
         paint: {
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            15,
-            ["interpolate", ["linear"], ["get", "probability"], 0, 5, 1, 15],
-            22,
-            ["interpolate", ["linear"], ["get", "probability"], 0, 10, 1, 30],
-          ],
-          "circle-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "probability"],
-            0,
-            "rgba(33,102,172,0)",
-            0.2,
-            "rgb(103,169,207)",
-            0.4,
-            "rgb(209,229,240)",
-            0.6,
-            "rgb(253,219,199)",
-            0.8,
-            "rgb(239,138,98)",
-            1,
-            "rgb(178,24,43)",
-          ],
-          "circle-stroke-color": "white",
-          "circle-stroke-width": 1,
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
-          "circle-emissive-strength": 1, // Glow in 3D lighting
+          "circle-radius": 8,
+          "circle-color": "#ffffff",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#000000",
+          "circle-emissive-strength": 1,
         },
       });
+    });
+
+    map.on("click", (e) => {
+      const { lng, lat } = e.lngLat;
+      setSelectedPoint([lng, lat]);
+      if (onMapClick) {
+        onMapClick(lat, lng);
+      }
     });
 
     return () => {
       map.remove();
     };
-  }, [geoJsonData]);
+  }, []); // Run once on mount
+
+  // Update Grid Data Source when `data` prop changes
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+    
+    const source = mapRef.current.getSource("sar-grid") as mapboxgl.GeoJSONSource;
+    if (source && data) {
+      source.setData(data);
+    }
+  }, [data]);
+
+  // Update Selection Point Source
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+
+    const source = mapRef.current.getSource("selection-point") as mapboxgl.GeoJSONSource;
+    if (source) {
+      if (selectedPoint) {
+        source.setData({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "Point",
+                coordinates: selectedPoint,
+              },
+            },
+          ],
+        });
+      } else {
+        source.setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+      }
+    }
+  }, [selectedPoint]);
+
+  // Fly to new center when `center` prop changes
+  useEffect(() => {
+    if (!mapRef.current || !center) return;
+    mapRef.current.flyTo({
+      center: center,
+      zoom: 12,
+      essential: true
+    });
+  }, [center]);
 
   return <div id="map" ref={mapContainerRef} style={{ height: "100%" }}></div>;
 }

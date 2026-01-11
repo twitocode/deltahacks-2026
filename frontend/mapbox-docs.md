@@ -1346,3 +1346,258 @@ To report new issues with Mapbox GL JS v3, create a bug report on GitHub.
     When using the globe projection, markers that are on the non-visible side of the globe have incorrect initial positions.
     Triggering a resize event while a flyTo animation is in progress changes the final animation position.
     Markers and the screen area receptive to clicks diverge between zoom level 5 and 6 under some circumstances when using the globe projection.
+
+
+Gestures and Events
+On this page
+
+    Default Map Gestures
+        Desktop Gestures
+        Mobile Gestures
+    Enable and Disable Default Gestures
+    User Interaction Events
+    External Interactions
+        Zoom Control
+        Fly the Camera
+        Show or Hide a Layer
+
+This guide explains how to work with user gestures and events in Mapbox GL JS. You'll learn about default map gestures, how to enable and disable gestures, how to listen for user interactions on the map and how to control the map from external events.
+Default Map Gestures
+
+Mapbox GL JS provides intuitive gestures to interact with the map. Gestures vary between desktop and mobile devices.
+Desktop Gestures
+
+    Pan around: Click and drag with mouse.
+    Adjust pitch: Right-click + drag up/down.
+    Gradually zoom: Scroll mouse wheel or use touch pinch gesture.
+    Rotate: Right-click + drag left/right. (Hold control + click + drag left/right on Mac)
+    Zoom in one level: Double-click.
+    Zoom out one level: Hold Shift and double-click.
+    Quick zoom: Hold Shift + drag a box.
+
+Mobile Gestures
+
+    Pan around: Tap and drag with touch screen.
+    Adjust pitch: Two-finger drag up/down.
+    Gradually zoom: Touch pinch gesture.
+    Rotate: Two-finger rotate.
+    Zoom in one level: Double-tap.
+    Zoom out one level: Two-finger tap.
+
+Enable and Disable Default Gestures
+
+You can enable or disable specific gestures when instantiating a map using the dragPan, scrollZoom, boxZoom, dragRotate, keyboard, and touchZoomRotate options.
+
+Example:
+
+const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v11',
+    center: [0, 0],
+    zoom: 2,
+    dragPan: true, // Enable or disable drag panning
+    scrollZoom: false, // Disable scroll zoom
+    boxZoom: true, // Enable box zoom
+    dragRotate: true, // Enable drag rotation
+    keyboard: true, // Enable keyboard controls
+    touchZoomRotate: true // Enable touch zoom & rotation
+});
+
+You can also enable and disable interactions after the map has been created:
+
+map.scrollZoom.disable();  // Disable scroll zoom
+map.scrollZoom.enable();   // Enable scroll zoom
+
+EXAMPLE
+Disable map rotation
+
+See an example of a map with rotation disabled.
+EXAMPLE
+Disable scroll zoom
+
+See an example of a map with scroll zoom disabled.
+EXAMPLE
+Display a non-interactive map
+
+See an example of a map with all default gestures disabled.
+User Interaction Events
+
+You can listen for user interactions on the map object by using events. Some common event types include:
+Event Name	Description
+move	Fires continuously as the map is panned or zoomed
+moveend	Fires when a panning movement has completed
+zoom	Fires continuously while the map is zooming
+zoomend	Fires when zooming has completed
+rotate	Fires continuously while the map is rotating
+rotateend	Fires when rotation has completed
+pitch	Fires continuously when the pitch is changing
+click	Fires when the user clicks the map
+
+These listeners are used with the on method:
+
+map.on('move', () => {
+    console.log('Map is moving');
+});
+
+map.on('click', (e) => {
+    console.log(`Clicked at: ${e.lngLat.lng}, ${e.lngLat.lat}`);
+});
+
+They can also be used with the Interactions API to handle interactions on layers, featuresets, or the map itself.
+
+map.addInteraction('my-polygon-click-interaction', {
+  type: 'click',
+  target: { layerId: 'polygons' },
+  handler: (e) => {
+    map.setFeatureState(e.feature, {highlight: true});
+  }
+});
+
+map.addInteraction('building-mouseenter', {
+  type: 'mouseenter',
+  target: {featuresetId: 'buildings', importId: 'basemap'},
+  handler: (e) => {
+    map.setFeatureState(e.feature, {highlight: true});
+  }
+});
+
+Explore all available events in the API reference documentation.
+EXAMPLE
+Add feature-level interactions to a map
+
+See an example of a map with interactions on a specific layer.
+EXAMPLE
+Add interactions to a Mapbox Standard Style
+
+See an example of a map with interactions on a featureset of the Mapbox Standard Style.
+External Interactions
+
+You can also control the map using external UI elements like buttons or sliders. Use the map object's methods to programmatically control the map.
+Zoom Control
+
+You can build your own zoom in/out UI and use the zoomIn and zoomOut methods to control the map.
+
+
+const zoomInButton = document.getElementById('zoom-in');
+
+zoomInButton.addEventListener('click', () => {
+    map.zoomIn();
+});
+
+Fly the Camera
+
+Use the flyTo method to smoothly transition the map to a new location when the user clicks a reset button.
+
+ const zoomOutButton = document.getElementById('reset-map-view');
+zoomOutButton.addEventListener('click', () => {
+    map.flyTo({
+        center: [0, 0],
+        zoom: 2
+    });
+});
+
+EXAMPLE
+Fly to a location
+
+See an example of a map with a button that triggers a fly-to animation.
+Show or Hide a Layer
+
+Show or hide a layer in the map's style when the user clicks a checkbox.
+
+
+const checkbox = document.getElementById('toggle-layer');
+checkbox.addEventListener('change', (event) => {
+    const layerId = 'my-layer';
+    if (event.target.checked) {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+    } else {
+        map.setLayoutProperty(layerId, 'visibility', 'none');
+    }
+});
+
+
+Interactions API
+On this page
+
+    Adding an interaction to a map layer
+    Adding an interaction to a featureset
+    Setting feature states
+    Adding an interaction to the map
+
+The new Interactions API is a toolset that allows you to handle interactions on layers, predefined featuresets in evolving basemap styles like Standard, and the map itself. The API is available starting from Mapbox GL JS v3.9.0.
+
+To use the API, you define interaction handlers for events like 'click' or 'mouseenter' that target specific map layers, featuresets, or the map itself. When a user interacts with map features belonging to one of these sets, the API will call the appropriate interaction handler for that feature that was interacted with.
+Adding an interaction to a map layer
+
+Add interactions to the map by indicating an event type ('click', 'mouseenter', 'mouseleave', etc), a target (either a layer or featureset), and a handler function.
+
+Use the addInteraction method to add the interaction:
+
+map.addInteraction('my-polygon-click-interaction', {
+  type: 'click',
+  target: { layerId: polygons },
+  handler: (e) => {
+    map.setFeatureState(e.feature, {highlight: true});
+  }
+});
+
+The handler in the example above will be called each time a user clicks a feature rendered on the polygons layer. The handler receives an event object with information about the interaction, including the feature that was interacted with. In this example, the handler sets a feature state on the clicked feature to highlight it.
+
+You can add an interaction at any time, there is no need to wait for the style to load. If there is no layer with the name provided, then no interaction will be added.
+
+Interactions can be removed by calling the removeInteraction method:
+
+map.removeInteraction('my-polygon-click-interaction');
+
+EXAMPLE
+Layer Interaction
+
+See a working example of using addInteraction to add hover and click interactions to a map layer.
+Adding an interaction to a featureset
+
+Interactions can also be added to a featureset. Featuresets are named groups of layers that can be defined in an evolving basemap style. In the Mapbox Standard Style, there are predefined Points-of-Interest (POI), Place Labels, and Buildings featuresets that include all corresponding features in the map. You can add interactions to your map that target these featuresets.
+
+To see the available featuresets in the Standard Style, see the Mapbox Standard Style API reference documentation.
+
+map.addInteraction('poi-click', {
+  type: 'click',
+  target: {featuresetId: 'poi', importId: 'basemap'},
+  handler(e) {
+    console.log(e.feature);
+  }
+});
+
+When you use a featureset, the interaction handler will receive a Feature object that contains the feature's properties and geometry. You can use this information to customize the behavior of your application based on the specific feature that was interacted with.
+EXAMPLE
+Featureset Interaction
+
+See a working example of using addInteraction to interact with featuresets in the Mapbox Standard style.
+Setting feature states
+
+After a feature is returned from the interaction, you can set its feature state. Setting the feature state allows you to control the appearance of individual features within a featureset.
+
+For example, you may want to highlight individual buildings after a user hovers the mouse over them. To do this, you would add an interaction targeting the buildings featureset. When a user taps on a building in this featureset, the building feature is available in the handler function. You then set the feature state for this feature's highlight configuration option to true. By default, highlighted buildings in Mapbox Standard will be displayed in blue, as shown in the image below. You can customize the color of selected buildings.
+
+map.addInteraction('building-mouseenter', {
+  type: 'mouseenter',
+  target: {featuresetId: 'buildings', importId: 'basemap'},
+  handler: (e) => {
+    map.setFeatureState(e.feature, {highlight: true});
+  }
+});
+
+Each predefined featureset in the Standard Style has appropriate configuration options that can be modified at runtime in this way. Explore the Mapbox Standard Documentation to learn more about the specific configuration options available for each featureset.
+EXAMPLE
+Featureset Interaction
+
+See a working example of using addInteraction to update feature states on featuresets in the Mapbox Standard style.
+Adding an interaction to the map
+
+You can use addInteraction in a way that doesn't take any layer or featureset by omitting the target option. This lets you handle events on the map itself. For example, you can add an interaction that listens for 'click' events anywhere on the map and logs the coordinates of the click to the console:
+
+map.addInteraction('map-click', {
+  type: 'click',
+  handler: (e) => {
+    console.log(`Clicked at: ${e.lngLat.lng}, ${e.lngLat.lat}`);
+  }
+});
