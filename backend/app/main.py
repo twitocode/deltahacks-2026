@@ -169,12 +169,12 @@ async def search_v1(request: SearchRequest):
             grid_size=grid_size  # Pass grid size to simulator
         )
         
-        # Convert time slices to hour-keyed predictions
+        # Convert time slices to minute-keyed predictions (consistent 15-min intervals)
         predictions: dict[str, List[List[float]]] = {}
-        target_hours = [0, 1, 3, 6, 12]
+        # Every 15 minutes from 0 to 720 minutes (12 hours)
+        target_minutes_list = list(range(0, 721, 15))  # [0, 15, 30, ... 720]
         
-        for hour in target_hours:
-            target_minutes = hour * 60
+        for target_minutes in target_minutes_list:
             # Find closest time slice
             best_slice = None
             best_diff = float('inf')
@@ -185,10 +185,10 @@ async def search_v1(request: SearchRequest):
                     best_slice = ts
             
             if best_slice and hasattr(best_slice, 'grid'):
-                predictions[str(hour)] = best_slice.grid
+                predictions[str(target_minutes)] = best_slice.grid
             else:
                 # Create empty 50x50 grid
-                predictions[str(hour)] = [[0.0] * grid_size for _ in range(grid_size)]
+                predictions[str(target_minutes)] = [[0.0] * grid_size for _ in range(grid_size)]
         
         logger.info(f"Search complete: generated {len(predictions)} hour predictions")
         
