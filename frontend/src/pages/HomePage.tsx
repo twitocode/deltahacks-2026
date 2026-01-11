@@ -91,10 +91,7 @@ function HomePage() {
             <button
               className="mt-16 bg-white text-gray-900 px-8 py-3 rounded-full font-medium text-sm hover:bg-gray-200 hover:scale-110 transition-all duration-300 ease-in-out shadow-lg cursor-pointer animate-fade-in-up"
               style={{ animationDelay: "400ms" }}
-              onClick={() => {
-                console.log("[HomePage] 'Get Started' clicked. Navigating to /map");
-                navigate("/map");
-              }}
+              onClick={() => navigate("/map")}
             >
               Get Started
             </button>
@@ -234,10 +231,7 @@ function HomePage() {
 
               <button
                 className="self-start rounded-full border border-gray-700 bg-transparent px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-700 hover:scale-110 transition-all duration-300 ease-in-out shadow-lg cursor-pointer"
-                onClick={() => {
-                  console.log("[HomePage] 'Learn More' clicked. Navigating to /map");
-                  navigate("/map");
-                }}
+                onClick={() => navigate("/map")}
               >
                 Learn More
               </button>
@@ -409,10 +403,7 @@ function HomePage() {
 
           <button
             className="mt-4 bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-200 hover:scale-105 transition-all duration-300 ease-in-out cursor-pointer"
-            onClick={() => {
-              console.log("[HomePage] 'Let's Demo' clicked. Navigating to /map");
-              navigate("/map");
-            }}
+            onClick={() => navigate("/map")}
           >
             Let's Demo
           </button>
