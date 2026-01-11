@@ -9,12 +9,12 @@ const Logo = ({ className = "w-7 h-7" }: { className?: string }) => {
       className="flex items-center gap-2 hover:opacity-80 transition-opacity"
     >
       <img
-        src="/images/deltahacks_logo.png"
-        alt="Beacon AI Logo"
+        src="/images/logo.svg"
+        alt="Waypoint Logo"
         className={`object-contain ${className}`}
       />
       <span className="text-xl font-bold tracking-tighter text-white">
-        Beacon.ai
+        Waypoint
       </span>
     </Link>
   );
