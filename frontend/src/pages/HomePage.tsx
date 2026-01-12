@@ -287,21 +287,20 @@ function HomePage() {
 
           {/* Citation Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Card 1 */}
+            {/* Card 1 (was Card 3) */}
             <div className="flex flex-col p-8 bg-[#111] rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors duration-300">
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
-                2014 • ScienceDirect
+                The Bravo Zulu
               </span>
               <h3 className="text-2xl font-['Open_Sans'] text-white mb-6 line-clamp-3">
-                An analysis of probability of area techniques for missing persons in Yosemite National Park
+                Dr. Robert Koester's Lost Person Behavior and How to Contribute to ISRID
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
-                <b>42%</b> of lost hikers are found directly on a linear feature (trail, road, or stream). For those not on a trail, the median distance from a linear feature is only <b>58 meters</b>.
+                Historically people were prone to going downhill, however with the use of cell phones the trend has changed that people are brought uphill for signal.
               </p>
               <a
-                href="https://pubmed.ncbi.nlm.nih.gov/36254507/"
+                href="https://www.d4h.com/blog/dr-robert-koesters-lost-person-behavior-and-how-to-contribute-to-isrid"
                 target="_blank"
-                rel="noopener noreferrer"
                 className="flex items-center gap-2 text-[#ff4d4d] text-sm font-medium hover:text-[#ff6b6b] transition-colors"
               >
                 Read Publication
@@ -356,20 +355,22 @@ function HomePage() {
               </a>
             </div>
 
-            {/* Card 3 */}
+            {/* Card 3 (was Card 1) */}
             <div className="flex flex-col p-8 bg-[#111] rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors duration-300">
               <span className="text-gray-500 text-sm font-jetbrains mb-4">
-                The Bravo Zulu
+                2012 • University of Kansas
               </span>
               <h3 className="text-2xl font-['Open_Sans'] text-white mb-6 line-clamp-3">
-                Dr. Robert Koester's Lost Person Behavior and How to Contribute to ISRID
+                Analysis of Search Incidents and Lost Person Behavior in Yosemite National Park
               </h3>
               <p className="text-gray-400 leading-relaxed mb-6 flex-1">
-                Historically people were prone to going downhill, however with the use of cell phones the trend has changed that people are brought uphill for signal.
+                The mean age of missing persons was 36 years old. Most people
+                were reported missing in July, on Saturday, and between the hours of 2 and 3 p.m.
               </p>
               <a
-                href="https://www.d4h.com/blog/dr-robert-koesters-lost-person-behavior-and-how-to-contribute-to-isrid"
+                href="https://kuscholarworks.ku.edu/server/api/core/bitstreams/26db2e0b-ec15-4e2e-b629-598f72dc9b43/content"
                 target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-2 text-[#ff4d4d] text-sm font-medium hover:text-[#ff6b6b] transition-colors"
               >
                 Read Publication
