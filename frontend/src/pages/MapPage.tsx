@@ -31,6 +31,9 @@ function MapPage() {
   const [isOnline, setIsOnline] = useState(true);
   const [is3D, setIs3D] = useState(true); // 3D/2D view toggle
   const [isDarkMode, setIsDarkMode] = useState(true); // Light/Dark mode toggle
+  const [isAutoSunMode, setIsAutoSunMode] = useState(true); // Auto-toggle based on sunset
+  const [sunTimes, setSunTimes] = useState<{ sunrise: Date; sunset: Date } | null>(null);
+  const [sunTimesLocation, setSunTimesLocation] = useState<string>(""); // Track which location we fetched for
 
   // Raw Data from Server (or Fake Generator)
   const [serverData, setServerData] = useState<ServerGridResponse | null>(null);
@@ -119,6 +122,58 @@ function MapPage() {
       setMapCenter([lng, lat]);
     }
   }, [formData.latitude, formData.longitude]);
+
+  // Fetch sunrise/sunset times when map center changes
+  useEffect(() => {
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return;
+    }
+
+    // Avoid refetching for same location (rounded to 2 decimals)
+    const locationKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+    if (locationKey === sunTimesLocation) return;
+
+    const fetchSunTimes = async () => {
+      try {
+        const response = await fetch(
+          `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&formatted=0`
+        );
+        const data = await response.json();
+        if (data.status === "OK") {
+          const sunrise = new Date(data.results.sunrise);
+          const sunset = new Date(data.results.sunset);
+          setSunTimes({ sunrise, sunset });
+          setSunTimesLocation(locationKey);
+          console.log(`[MapPage] Sun times for (${lat.toFixed(2)}, ${lng.toFixed(2)}): Sunrise ${sunrise.toLocaleTimeString()}, Sunset ${sunset.toLocaleTimeString()}`);
+        }
+      } catch (error) {
+        console.error("[MapPage] Failed to fetch sun times:", error);
+      }
+    };
+
+    fetchSunTimes();
+  }, [formData.latitude, formData.longitude, sunTimesLocation]);
+
+  // Auto-toggle dark mode based on sunset time
+  useEffect(() => {
+    if (!isAutoSunMode || !sunTimes) return;
+
+    const updateDarkMode = () => {
+      const now = new Date();
+      const isNightTime = now < sunTimes.sunrise || now > sunTimes.sunset;
+      setIsDarkMode(isNightTime);
+    };
+
+    // Update immediately
+    updateDarkMode();
+
+    // Update every minute
+    const interval = setInterval(updateDarkMode, 60000);
+    return () => clearInterval(interval);
+  }, [isAutoSunMode, sunTimes]);
 
   // Mutation for fetching prediction (Simulates API or Fake Data)
   const { mutate: getPrediction, isPending } = useMutation({
@@ -482,44 +537,72 @@ function MapPage() {
               {is3D ? "3D" : "2D"}
             </span>
           </button>
-          {/* Light/Dark Mode Toggle */}
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg hover:bg-[#2a2a2a] transition-colors cursor-pointer"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5 text-white"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
-                />
-              </svg>
-            ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5 text-yellow-400"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
-                />
-              </svg>
+          {/* Light/Dark Mode Toggle with Sunset Info */}
+          <div className="flex items-center gap-2">
+            {/* Dark/Light Toggle */}
+            <button
+              onClick={() => {
+                setIsAutoSunMode(false); // Switch to manual when user toggles
+                setIsDarkMode(!isDarkMode);
+              }}
+              className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg hover:bg-[#2a2a2a] transition-colors cursor-pointer"
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5 text-white"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5 text-yellow-400"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                  />
+                </svg>
+              )}
+            </button>
+            {/* Sunset Time Display */}
+            {sunTimes && (
+              <div className="bg-[#1a1a1a] px-3 py-2 rounded-full flex items-center gap-2 shadow-lg">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-4 h-4 text-orange-400"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                  />
+                </svg>
+                <span className="text-xs text-gray-300">
+                  Sunset: {sunTimes.sunset.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
             )}
-          </button>
+          </div>
           {/* Online Status */}
           <div className="bg-[#1a1a1a] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
             <div
@@ -724,13 +807,13 @@ function MapPage() {
               {Array.from(
                 { length: Math.floor(maxMinutes / 120) + 1 },
                 (_, i) => (
-                  <span key={i}>+{i * 2}h</span>
+                  <span key={i}>{i === 0 ? "Now" : `+${i * 2}h`}</span>
                 )
               )}
             </div>
             <div className="text-center mt-2">
               <span className="text-gray-300 text-xs font-jetbrains">
-                Current: {formatTimeLabel(timeOffset)}
+                Current: {timeOffset === 0 ? "Now" : formatTimeLabel(timeOffset)}
               </span>
             </div>
           </div>
